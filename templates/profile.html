@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="profile-container">
+    <h1>Личный кабинет</h1>
+    <div class="profile-info">
+        <p><strong>Имя пользователя:</strong> {{ session.get['username'] if user else 'Гость' }}</p>
+        <p><strong>Email:</strong> {{ session.get['email'] if user else 'Не авторизован' }}</p>
+    </div>
+    <div class="progress-section">
+        <h2>Ваш прогресс</h2>
+        <div class="progress-bar">
+            <div class="progress" style="width: 25%">25%</div>
+        </div>
+    </div>
+</div>
+{% endblock %}

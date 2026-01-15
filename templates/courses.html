@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="courses-container">
+    <h1>Доступные курсы</h1>
+    <div class="course-list">
+        {% for course in courses %}
+            <div class="course-card">
+                <h3>{{course[]}}</h3>
+                <p>*Содержание курса*</p>
+                <a href="{{ url_for('lesson', lesson_id=1) }}" class="btn btn-primary">Начать</a>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

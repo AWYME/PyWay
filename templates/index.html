@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="hero-section">
+    <h1>Изучайте Python в игровой форме</h1>
+    <p>Интерактивные уроки, практические задания и отслеживание прогресса</p>
+    <div class="cta-buttons">
+        <a href="{{ url_for('register') }}" class="btn btn-primary">Начать обучение</a>
+        <a href="{{ url_for('courses') }}" class="btn btn-secondary">Смотреть курсы</a>
+    </div>
+</div>
+{% endblock %}
