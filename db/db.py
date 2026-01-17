@@ -10,35 +10,6 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-def add_sample_data(conn):
-    conn.execute('''
-        INSERT OR IGNORE INTO courses (title, description, difficulty_level, order_index)
-        VALUES (?, ?, ?, ?)
-    ''', ('Python для начинающих', 'Изучите основы Python с нуля', 'beginner', 1))
-    
-    course_id = conn.execute('SELECT id FROM courses WHERE title = ?', 
-                           ('Python для начинающих',)).fetchone()['id']
-    
-    conn.execute('''
-        INSERT INTO modules (course_id, title, description, order_index)
-        VALUES (?, ?, ?, ?)
-    ''', (course_id, 'Основы Python', 'Переменные, типы данных и базовые операции', 1))
-    
-    module_id = conn.execute('SELECT id FROM modules WHERE title = ?', 
-                           ('Основы Python',)).fetchone()['id']
-    
-    lessons = [
-        (module_id, 'Введение в Python', 'Этот урок познакомит вас с языком Python...', 1, 'theory'),
-        (module_id, 'Переменные и типы данных', 'Узнайте о переменных и основных типах данных...', 2, 'theory'),
-        (module_id, 'Ваша первая программа', 'Напишите свою первую программу на Python!', 3, 'practice'),
-    ]
-    
-    for lesson in lessons:
-        conn.execute('''
-            INSERT INTO lessons (module_id, title, content, order_index, lesson_type)
-            VALUES (?, ?, ?, ?, ?)
-        ''', lesson)
-
 def create_user(username, email, password):
     conn = get_db_connection()
     password_hash = generate_password_hash(password)
