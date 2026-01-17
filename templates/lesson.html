@@ -1,14 +1,146 @@
 {% extends "base.html" %}
 
+{% block title %}Урок {{ lesson.title }} - PyWay{% endblock %}
+
 {% block content %}
 <div class="lesson-container">
-    <h1>Урок {{ lesson_id }}</h1>
-    <div class="lesson-content">
-        <p>Здесь будет содержание урока...</p>
+    <div class="lesson-header">
+        <h1>{{ lesson.title }}</h1>
+        <div class="lesson-meta">
+            <span class="module-badge">Модуль: {{ module_title }}</span>
+            <span class="progress-status">
+                {% if lesson_completed %}✅ Пройдено{% else %}🔄 В процессе{% endif %}
+            </span>
+        </div>
     </div>
-    <div class="navigation">
-        <a href="#" class="btn btn-secondary">Предыдущий урок</a>
-        <a href="#" class="btn btn-primary">Следующий урок</a>
+
+    <div class="lesson-layout">
+        <!-- Левая колонка: Теория -->
+        <div class="theory-section">
+            <div class="theory-content">
+                <h2>📚 Теория</h2>
+                <div class="theory-text">
+                    {{ lesson.content|safe }}
+                </div>
+                
+                <div class="assignment">
+                    <h3>🎯 Задание</h3>
+                    <div class="assignment-description">
+                        {{ assignment_description|default("Напишите код для решения задачи ниже") }}
+                    </div>
+                    
+                    <div class="examples">
+                        <h4>📋 Примеры работы программы:</h4>
+                        <table class="examples-table">
+                            <thead>
+                                <tr>
+                                    <th>Входные данные (input)</th>
+                                    <th>Ожидаемый вывод (output)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="test-cases-list">
+                                <!-- Тестовые случаи будут добавлены через JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Правая колонка: Редактор кода -->
+        <div class="editor-section">
+            <div class="editor-header">
+                <h2>💻 Редактор кода</h2>
+                <div class="editor-controls">
+                    <button id="run-btn" class="btn btn-primary">
+                        ▶ Запустить код
+                    </button>
+                    <button id="reset-btn" class="btn btn-secondary">
+                        ↺ Сбросить код
+                    </button>
+                </div>
+            </div>
+
+            <!-- Редактор кода -->
+            <div id="code-editor"></div>
+            
+            <div class="editor-footer">
+                <div class="hint-box">
+                    <strong>💡 Подсказка:</strong>
+                    <span id="hint-text">{{ lesson.hints|default("Используйте print() для вывода результата") }}</span>
+                </div>
+            </div>
+
+            <!-- Консоль с результатами -->
+            <div class="console-section">
+                <div class="console-header">
+                    <h3>📊 Результаты выполнения</h3>
+                    <div class="console-stats">
+                        <span id="test-count">Тестов: 0</span>
+                        <span id="passed-count">✅ Пройдено: 0</span>
+                        <span id="failed-count">❌ Не пройдено: 0</span>
+                    </div>
+                </div>
+                
+                <div class="console-output">
+                    <div id="test-results">
+                        <!-- Здесь будут отображаться результаты тестов -->
+                        <div class="empty-results">
+                            <p>Запустите код, чтобы увидеть результаты тестирования</p>
+                        </div>
+                    </div>
+                    
+                    <div class="execution-info">
+                        <div id="loading-indicator" style="display: none;">
+                            <div class="spinner"></div>
+                            <span>Выполнение кода...</span>
+                        </div>
+                        <div id="execution-time" style="display: none;">
+                            Время выполнения: <span id="time-value">0</span> сек
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Кнопка завершения урока (показывается после успешного прохождения) -->
+                <div id="completion-section" style="display: none;">
+                    <div class="success-message">
+                        <h3>🎉 Поздравляем!</h3>
+                        <p>Вы успешно выполнили все тесты для этого урока.</p>
+                        <form method="POST" action="{{ url_for('complete_lesson', lesson_id=lesson.id) }}">
+                            <button type="submit" class="btn btn-success">
+                                ✅ Завершить урок
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- Подключаем библиотеки для редактора кода -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/python/python.min.js"></script>
+
+<!-- Подключаем наши скрипты и стили для редактора -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/editor.css') }}">
+<script src="{{ url_for('static', filename='js/editor.js') }}"></script>
+
+<!-- Передаем данные из Flask в JavaScript через JSON -->
+<script type="application/json" id="lesson-config">
+{
+    "lessonId": {{ lesson.id }},
+    "defaultCode": {{ starter_code|default("# Напишите ваш код здесь\\n# Используйте print() для вывода результата\\n\\n# Пример решения:\\ndef solve():\\n    # Ваш код здесь\\n    pass\\n\\nif __name__ == \"__main__\":\\n    solve()")|tojson|safe }},
+    "testCases": {{ test_cases|tojson|safe }},
+    "isCompleted": {{ lesson_completed|tojson }},
+    "apiUrl": "{{ url_for('execute_code') }}"
+}
+</script>
+
+<script>
+// Чтение конфигурации из JSON
+const lessonConfig = JSON.parse(document.getElementById('lesson-config').textContent);
+</script>
 {% endblock %}
