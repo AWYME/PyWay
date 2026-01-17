@@ -6,14 +6,14 @@ app.secret_key = 'your-secret-key-here'
 
 @app.route('/')
 def index():
-    courses = get_courses()
+    courses = get_all_courses()
     user_progress = None
     if 'user_id' in session:
         user_progress = get_user_progress(session['user_id'])
     return render_template('index.html', courses=courses, user_progress=user_progress)
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
     if request.method == 'POST':
         username = request.form['username']
         email = request.form['email']
@@ -22,19 +22,24 @@ def register():
         user_id = create_user(username, email, password)
         if user_id:
             flash('Регистрация успешна! Теперь войдите в систему.', 'success')
-            return redirect(url_for('login'))
+            username = request.form['username']
+            password = request.form['password']
+            user = get_user_by_username(username)
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            return redirect(url_for('index'))
         else:
             flash('Пользователь с таким именем или email уже существует.', 'error')
     
-    return render_template('auth/register.html')
+    return render_template('auth/signup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
+        email = request.form['email']
         password = request.form['password']
         
-        user = get_user_by_username(username)
+        user = get_user_by_email(email)
         if user and verify_password(user, password):
             session['user_id'] = user['id']
             session['username'] = user['username']
@@ -51,7 +56,7 @@ def logout():
 
 @app.route('/courses')
 def courses():
-    courses_list = get_courses()
+    courses_list = get_all_courses()
     user_progress = {}
     if 'user_id' in session:
         for course in courses_list:
