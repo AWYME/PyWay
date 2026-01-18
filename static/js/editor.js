@@ -8,131 +8,182 @@ let codeEditor;
 let testCases = [];
 let isLessonCompleted = false;
 
+// Используем window.lessonConfig или значения по умолчанию
+const lessonConfig = window.lessonConfig || {
+    lessonId: 0,
+    defaultCode: '# Напишите ваш код здесь\n# Используйте print() для вывода результата',
+    testCases: [],
+    isCompleted: false,
+    apiUrl: '/api/execute'
+};
+
+console.log('editor.js: Конфигурация загружена', lessonConfig);
+
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
-    initEditor();
-    initTestCases();
-    setupEventListeners();
+    console.log('editor.js: DOMContentLoaded');
     
-    // Загружаем сохранённый код из БД при загрузке страницы
-    loadSavedCode(lessonConfig.lessonId).then(loaded => {
-        if (!loaded) {
-            // Если нет сохранённого кода, загружаем из localStorage
-            loadCodeFromStorage();
+    // Небольшая задержка для гарантии загрузки всех элементов
+    setTimeout(function() {
+        initEditor();
+        initTestCases();
+        setupEventListeners();
+        
+        // Если урок уже пройден, показываем сообщение
+        if (lessonConfig.isCompleted) {
+            showCompletionMessage();
         }
-    });
-    
-    // Если урок уже пройден, показываем сообщение
-    if (lessonConfig.isCompleted) {
-        showCompletionMessage();
-    }
+        
+        console.log('editor.js: Инициализация завершена');
+    }, 100);
 });
 
 // Инициализация CodeMirror редактора
 function initEditor() {
-    codeEditor = CodeMirror(document.getElementById('code-editor'), {
-        mode: 'python',
-        theme: 'dracula',
-        lineNumbers: true,
-        indentUnit: 4,
-        tabSize: 4,
-        indentWithTabs: false,
-        lineWrapping: true,
-        autoCloseBrackets: true,
-        matchBrackets: true,
-        extraKeys: {
-            "Ctrl-Space": "autocomplete",
-            "Tab": function(cm) {
-                if (cm.somethingSelected()) {
-                    cm.indentSelection("add");
-                } else {
-                    cm.replaceSelection("    ", "end");
+    console.log('initEditor: начало инициализации');
+    
+    // Проверяем, существует ли элемент
+    const editorElement = document.getElementById('code-editor');
+    if (!editorElement) {
+        console.error('initEditor: Элемент #code-editor не найден!');
+        return;
+    }
+    
+    console.log('initEditor: элемент найден, создаём CodeMirror');
+    
+    try {
+        // Создаём редактор CodeMirror
+        codeEditor = CodeMirror(editorElement, {
+            mode: 'python',
+            theme: 'dracula',
+            lineNumbers: true,
+            indentUnit: 4,
+            tabSize: 4,
+            indentWithTabs: false,
+            lineWrapping: true,
+            autoCloseBrackets: true,
+            matchBrackets: true,
+            extraKeys: {
+                "Tab": function(cm) {
+                    if (cm.somethingSelected()) {
+                        cm.indentSelection("add");
+                    } else {
+                        cm.replaceSelection("    ", "end");
+                    }
+                },
+                "Shift-Tab": function(cm) {
+                    cm.indentSelection("subtract");
                 }
             },
-            "Shift-Tab": function(cm) {
-                cm.indentSelection("subtract");
+            value: lessonConfig.defaultCode
+        });
+        
+        // Устанавливаем размер редактора
+        codeEditor.setSize('100%', '400px');
+        
+        // Делаем редактор доступным глобально для отладки
+        window.codeEditor = codeEditor;
+        
+        console.log('initEditor: CodeMirror успешно инициализирован');
+        
+    } catch (error) {
+        console.error('initEditor: Ошибка при создании CodeMirror:', error);
+        
+        // Запасной вариант: простой textarea
+        editorElement.innerHTML = `
+            <div style="color: #666; padding: 10px; background: #f9f9f9; border: 1px solid #ddd;">
+                <p><strong>Редактор кода</strong></p>
+            </div>
+            <textarea id="simple-editor" 
+                      style="width:100%; height:400px; font-family: 'Consolas', monospace; padding:10px; border:1px solid #ddd;">
+${lessonConfig.defaultCode}
+            </textarea>
+            <p><small>Используйте это текстовое поле для написания кода</small></p>
+        `;
+        
+        // Создаём простой интерфейс для текстового поля
+        window.codeEditor = {
+            getValue: function() { 
+                const elem = document.getElementById('simple-editor');
+                return elem ? elem.value : ''; 
+            },
+            setValue: function(code) { 
+                const elem = document.getElementById('simple-editor');
+                if (elem) elem.value = code; 
             }
-        },
-        value: lessonConfig.defaultCode
-    });
-    
-    // Устанавливаем размер редактора
-    codeEditor.setSize('100%', '400px');
+        };
+    }
 }
 
 // Инициализация тестовых случаев
 function initTestCases() {
-    testCases = lessonConfig.testCases || [
-        {
-            id: 1,
-            input: "5\n3",
-            output: "8",
-            description: "Сложение двух чисел"
-        },
-        {
-            id: 2,
-            input: "10\n-2",
-            output: "8",
-            description: "Сложение положительного и отрицательного"
-        },
-        {
-            id: 3,
-            input: "0\n0",
-            output: "0",
-            description: "Сложение нулей"
-        }
-    ];
+    testCases = lessonConfig.testCases || [];
     
-    // Отображаем тестовые случаи в таблице
-    const testCasesList = document.getElementById('test-cases-list');
-    testCasesList.innerHTML = '';
-    
-    testCases.forEach((testCase, index) => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>
-                <div class="test-case-input">${testCase.input.replace(/\n/g, '<br>')}</div>
-                <small>${testCase.description || `Тест ${index + 1}`}</small>
-            </td>
-            <td>
-                <div class="test-case-output">${testCase.output}</div>
-            </td>
-        `;
-        testCasesList.appendChild(row);
-    });
+    console.log('initTestCases: загружено тестов', testCases.length);
     
     // Обновляем счетчик тестов
-    document.getElementById('test-count').textContent = `Тестов: ${testCases.length}`;
+    const testCountElement = document.getElementById('test-count');
+    if (testCountElement) {
+        testCountElement.textContent = `Тестов: ${testCases.length}`;
+    }
 }
 
 // Настройка обработчиков событий
 function setupEventListeners() {
+    console.log('setupEventListeners: настройка обработчиков');
+    
     // Кнопка запуска кода
-    document.getElementById('run-btn').addEventListener('click', executeCode);
+    const runBtn = document.getElementById('run-btn');
+    if (runBtn) {
+        runBtn.addEventListener('click', executeCode);
+        console.log('setupEventListeners: кнопка "Запустить тесты" подключена');
+    } else {
+        console.error('setupEventListeners: кнопка #run-btn не найдена');
+    }
     
     // Кнопка сброса кода
-    document.getElementById('reset-btn').addEventListener('click', resetCode);
+    const resetBtn = document.getElementById('reset-btn');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', resetCode);
+    }
     
     // Сохранение кода при потере фокуса редактора
-    codeEditor.on('blur', function() {
-        saveCodeToStorage();
-    });
+    if (codeEditor && codeEditor.on) {
+        codeEditor.on('blur', function() {
+            saveCodeToStorage();
+        });
+    }
 }
 
 // Функция выполнения кода
 async function executeCode() {
-    const code = codeEditor.getValue();
+    console.log('executeCode: начало выполнения');
+    
+    const code = window.codeEditor ? window.codeEditor.getValue() : '';
     const runBtn = document.getElementById('run-btn');
     const loadingIndicator = document.getElementById('loading-indicator');
     const testResults = document.getElementById('test-results');
     
+    if (!code.trim()) {
+        alert('Введите код для выполнения');
+        return;
+    }
+    
+    console.log('executeCode: код получен, длина', code.length);
+    
     // Блокируем кнопку и показываем индикатор загрузки
-    runBtn.disabled = true;
-    runBtn.textContent = 'Выполнение...';
-    loadingIndicator.style.display = 'flex';
+    if (runBtn) {
+        runBtn.disabled = true;
+        runBtn.textContent = 'Выполнение...';
+    }
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'flex';
+    }
     
     // Очищаем предыдущие результаты
-    testResults.innerHTML = '';
+    if (testResults) {
+        testResults.innerHTML = '';
+    }
     
     let passedTests = 0;
     let failedTests = 0;
@@ -143,12 +194,15 @@ async function executeCode() {
         const testCase = testCases[i];
         
         try {
+            console.log(`executeCode: запуск теста ${i + 1}`, testCase);
             const result = await runSingleTest(code, testCase.input);
             const testPassed = compareOutput(result, testCase.output);
             
             // Создаем элемент результата теста
             const testElement = createTestResultElement(testCase, result, testPassed, i + 1);
-            testResults.appendChild(testElement);
+            if (testResults) {
+                testResults.appendChild(testElement);
+            }
             
             if (testPassed) {
                 passedTests++;
@@ -157,9 +211,12 @@ async function executeCode() {
             }
             
         } catch (error) {
+            console.error(`executeCode: ошибка в тесте ${i + 1}:`, error);
             // Обработка ошибок выполнения
             const errorElement = createTestErrorElement(testCase, error.message, i + 1);
-            testResults.appendChild(errorElement);
+            if (testResults) {
+                testResults.appendChild(errorElement);
+            }
             failedTests++;
         }
     }
@@ -167,32 +224,31 @@ async function executeCode() {
     const endTime = performance.now();
     const executionTime = (endTime - startTime) / 1000;
     
+    console.log(`executeCode: результаты - пройдено: ${passedTests}, не пройдено: ${failedTests}`);
+    
     // Обновляем статистику
     updateTestStats(passedTests, failedTests, executionTime);
     
     // Проверяем, пройдены ли все тесты
     if (passedTests === testCases.length && testCases.length > 0) {
+        console.log('executeCode: все тесты пройдены!');
         showCompletionSection();
         
         // Автоматически заполняем поле с кодом для отправки формы
         const finalCodeInput = document.getElementById('final-code-input');
-        if (finalCodeInput) {
-            finalCodeInput.value = code;
-        }
-        
-        // Сохраняем код в БД через API (опционально)
-        try {
-            await saveUserCode(lessonConfig.lessonId, code);
-        } catch (saveError) {
-            console.log('Код не сохранён в историю:', saveError);
-            // Не блокируем пользователя при ошибке сохранения
+        if (finalCodeInput && window.codeEditor) {
+            finalCodeInput.value = window.codeEditor.getValue();
         }
     }
     
     // Восстанавливаем кнопку и скрываем индикатор
-    runBtn.disabled = false;
-    runBtn.textContent = '▶ Запустить код';
-    loadingIndicator.style.display = 'none';
+    if (runBtn) {
+        runBtn.disabled = false;
+        runBtn.textContent = '▶ Запустить тесты';
+    }
+    if (loadingIndicator) {
+        loadingIndicator.style.display = 'none';
+    }
     
     // Сохраняем код в localStorage
     saveCodeToStorage();
@@ -200,37 +256,50 @@ async function executeCode() {
 
 // Запуск одного теста
 async function runSingleTest(code, inputData) {
-    // Используем сервис Judge0 для безопасного выполнения кода
-    // В реальном проекте нужно использовать свой серверный endpoint
-    const response = await fetch(lessonConfig.apiUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            code: code,
-            input: inputData,
-            language: 'python'
-        })
-    });
+    console.log('runSingleTest: отправка запроса на выполнение');
     
-    if (!response.ok) {
-        throw new Error('Ошибка при выполнении кода');
+    try {
+        const response = await fetch(lessonConfig.apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                code: code,
+                input: inputData,
+                language: 'python'
+            })
+        });
+        
+        console.log('runSingleTest: ответ получен, статус', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`Ошибка сервера: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('runSingleTest: результат', result);
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        return result.output || '';
+        
+    } catch (error) {
+        console.error('runSingleTest: ошибка запроса:', error);
+        throw error;
     }
-    
-    const result = await response.json();
-    
-    if (result.error) {
-        throw new Error(result.error);
-    }
-    
-    return result.output || '';
 }
 
 // Сравнение вывода с ожидаемым результатом
 function compareOutput(actual, expected) {
     // Нормализуем строки: убираем лишние пробелы и переводы строк
-    const normalize = (str) => str.trim().replace(/\r\n/g, '\n').replace(/\s+/g, ' ');
+    const normalize = (str) => {
+        if (typeof str !== 'string') return '';
+        return str.trim().replace(/\r\n/g, '\n').replace(/\s+/g, ' ');
+    };
+    
     return normalize(actual) === normalize(expected);
 }
 
@@ -251,7 +320,7 @@ function createTestResultElement(testCase, actualOutput, passed, testNumber) {
             <div class="test-io">
                 <div class="io-section">
                     <strong>Входные данные:</strong>
-                    <pre>${testCase.input}</pre>
+                    <pre>${testCase.input || '(пусто)'}</pre>
                 </div>
                 <div class="io-section">
                     <strong>Ожидаемый вывод:</strong>
@@ -283,7 +352,7 @@ function createTestErrorElement(testCase, errorMessage, testNumber) {
             <div class="test-io">
                 <div class="io-section">
                     <strong>Входные данные:</strong>
-                    <pre>${testCase.input}</pre>
+                    <pre>${testCase.input || '(пусто)'}</pre>
                 </div>
                 <div class="io-section">
                     <strong>Ошибка:</strong>
@@ -298,133 +367,106 @@ function createTestErrorElement(testCase, errorMessage, testNumber) {
 
 // Обновление статистики тестов
 function updateTestStats(passed, failed, time) {
-    document.getElementById('passed-count').textContent = `✅ Пройдено: ${passed}`;
-    document.getElementById('failed-count').textContent = `❌ Не пройдено: ${failed}`;
-    
+    const passedElement = document.getElementById('passed-count');
+    const failedElement = document.getElementById('failed-count');
     const timeElement = document.getElementById('execution-time');
-    document.getElementById('time-value').textContent = time.toFixed(2);
-    timeElement.style.display = 'block';
+    
+    if (passedElement) {
+        passedElement.textContent = `✅ Пройдено: ${passed}`;
+    }
+    if (failedElement) {
+        failedElement.textContent = `❌ Не пройдено: ${failed}`;
+    }
+    if (timeElement) {
+        const timeValue = document.getElementById('time-value');
+        if (timeValue) {
+            timeValue.textContent = time.toFixed(2);
+        }
+        timeElement.style.display = 'block';
+    }
 }
 
 // Показать секцию завершения
 function showCompletionSection() {
     const completionSection = document.getElementById('completion-section');
-    completionSection.style.display = 'block';
-    
-    // Прокручиваем к секции завершения
-    completionSection.scrollIntoView({ behavior: 'smooth' });
+    if (completionSection) {
+        completionSection.style.display = 'block';
+        console.log('showCompletionSection: секция завершения показана');
+        
+        // Прокручиваем к секции завершения
+        completionSection.scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
 // Показать сообщение о пройденном уроке
 function showCompletionMessage() {
     isLessonCompleted = true;
-    document.getElementById('run-btn').disabled = true;
-    document.getElementById('run-btn').textContent = '✅ Урок пройден';
-    
+    const runBtn = document.getElementById('run-btn');
     const completionSection = document.getElementById('completion-section');
-    completionSection.style.display = 'block';
     
-    // Заменяем текст в секции завершения
-    const successMessage = completionSection.querySelector('.success-message');
-    successMessage.innerHTML = `
-        <h3>🎉 Урок уже пройден!</h3>
-        <p>Вы успешно завершили этот урок ранее.</p>
-        <a href="/courses" class="btn btn-primary">Вернуться к курсам</a>
-    `;
+    if (runBtn) {
+        runBtn.disabled = true;
+        runBtn.textContent = '✅ Урок пройден';
+    }
+    
+    if (completionSection) {
+        completionSection.style.display = 'block';
+        completionSection.innerHTML = `
+            <div class="success-message">
+                <h3>🎉 Урок уже пройден!</h3>
+                <p>Вы успешно завершили этот урок ранее.</p>
+                <a href="/courses" class="btn btn-primary">Вернуться к курсам</a>
+            </div>
+        `;
+    }
 }
 
 // Сброс кода к исходному состоянию
 function resetCode() {
     if (confirm('Вы уверены, что хотите сбросить код к исходному состоянию?')) {
-        codeEditor.setValue(lessonConfig.defaultCode);
-        codeEditor.focus();
+        if (window.codeEditor) {
+            window.codeEditor.setValue(lessonConfig.defaultCode);
+        }
         
         // Очищаем результаты
-        document.getElementById('test-results').innerHTML = 
-            '<div class="empty-results"><p>Запустите код, чтобы увидеть результаты тестирования</p></div>';
+        const testResults = document.getElementById('test-results');
+        if (testResults) {
+            testResults.innerHTML = '<div class="empty-results"><p>Запустите код, чтобы увидеть результаты тестирования</p></div>';
+        }
         
         // Сбрасываем статистику
-        document.getElementById('passed-count').textContent = '✅ Пройдено: 0';
-        document.getElementById('failed-count').textContent = '❌ Не пройдено: 0';
-        document.getElementById('execution-time').style.display = 'none';
+        updateTestStats(0, 0, 0);
+        const timeElement = document.getElementById('execution-time');
+        if (timeElement) {
+            timeElement.style.display = 'none';
+        }
         
-        // Скрываем секцию завершения (если была показана)
-        if (!isLessonCompleted) {
-            document.getElementById('completion-section').style.display = 'none';
+        // Скрываем секцию завершения
+        const completionSection = document.getElementById('completion-section');
+        if (completionSection && !isLessonCompleted) {
+            completionSection.style.display = 'none';
         }
     }
 }
 
 // Сохранение кода в localStorage
 function saveCodeToStorage() {
-    const code = codeEditor.getValue();
-    const storageKey = `pyway_lesson_${lessonConfig.lessonId}_code`;
-    localStorage.setItem(storageKey, code);
+    if (window.codeEditor) {
+        const code = window.codeEditor.getValue();
+        const storageKey = `pyway_lesson_${lessonConfig.lessonId}_code`;
+        localStorage.setItem(storageKey, code);
+        console.log('saveCodeToStorage: код сохранён в localStorage');
+    }
 }
 
 // Загрузка кода из localStorage
 function loadCodeFromStorage() {
     const storageKey = `pyway_lesson_${lessonConfig.lessonId}_code`;
     const savedCode = localStorage.getItem(storageKey);
-    if (savedCode && savedCode !== lessonConfig.defaultCode) {
-        if (confirm('Найден сохраненный код. Загрузить его?')) {
-            codeEditor.setValue(savedCode);
-        }
-    }
-}
-
-/**
- * Сохранение кода пользователя в БД через API
- * @param {number} lessonId - ID урока
- * @param {string} code - Код пользователя
- */
-async function saveUserCode(lessonId, code) {
-    try {
-        const response = await fetch(`/api/lesson/${lessonId}/save-code`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                code: code,
-                completed_tests: testCases.length // Можно передать количество пройденных тестов
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            console.log('Код успешно сохранён в БД');
-            return result;
-        } else {
-            console.warn('Не удалось сохранить код:', result.message);
-            return null;
-        }
-    } catch (error) {
-        console.error('Ошибка сохранения кода в БД:', error);
-        return null;
-    }
-}
-
-/**
- * Загрузка сохранённого кода из БД
- * @param {number} lessonId - ID урока
- */
-async function loadSavedCode(lessonId) {
-    try {
-        const response = await fetch(`/api/lesson/${lessonId}/get-code`);
-        const result = await response.json();
-        
-        if (result.success && result.code && result.code.trim() !== '') {
-            // Предлагаем загрузить сохранённый код
-            if (confirm('Найден сохранённый код для этого урока. Загрузить его?')) {
-                codeEditor.setValue(result.code);
-                return true;
-            }
-        }
-        return false;
-    } catch (error) {
-        console.log('Не удалось загрузить сохранённый код:', error);
-        return false;
+    
+    if (savedCode && savedCode !== lessonConfig.defaultCode && window.codeEditor) {
+        // Не спрашиваем подтверждения, просто загружаем
+        window.codeEditor.setValue(savedCode);
+        console.log('loadCodeFromStorage: код загружен из localStorage');
     }
 }
