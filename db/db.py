@@ -28,18 +28,16 @@ def get_db_connection():
 
 def init_db():
     """
-    Инициализирует базу данных: создает все необходимые таблицы, если они не существуют.
-    Также заполняет базу начальными тестовыми данными (курсы и уроки).
-    Эту функцию следует вызвать один раз при первом запуске приложения.
+    Инициализирует базу данных: создает все необходимые таблицы
     """
     conn = get_db_connection()
     
-    # Включаем поддержку внешних ключей (FOREIGN KEYS) для SQLite.
+    # Включаем поддержку внешних ключей
     conn.execute("PRAGMA foreign_keys = ON")
     
-    # ========== СОЗДАНИЕ ТАБЛИЦ ==========
+    # СОЗДАЕМ ТАБЛИЦЫ по порядку:
     
-    # Таблица пользователей
+    # 1. Таблица пользователей
     conn.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,7 +52,7 @@ def init_db():
         )
     ''')
     
-    # Таблица курсов
+    # 2. Таблица курсов (ДОЛЖНА БЫТЬ ПЕРВОЙ из зависимых)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS courses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,7 +65,7 @@ def init_db():
         )
     ''')
     
-    # Таблица модулей (разделы внутри курса)
+    # 3. Таблица модулей (зависит от courses)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS modules (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,7 +78,7 @@ def init_db():
         )
     ''')
     
-    # Таблица уроков
+    # 4. Таблица уроков (зависит от modules)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS lessons (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,7 +94,22 @@ def init_db():
         )
     ''')
     
-    # Таблица прогресса пользователя (связь "многие-ко-многим" между users и lessons)
+    # 5. Таблица упражнений (зависит от lessons)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS exercises (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lesson_id INTEGER NOT NULL,
+            question TEXT NOT NULL,
+            starter_code TEXT,
+            solution_code TEXT NOT NULL,
+            test_cases TEXT,
+            difficulty VARCHAR(20) DEFAULT 'easy',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (lesson_id) REFERENCES lessons (id) ON DELETE CASCADE
+        )
+    ''')
+    
+    # 6. Таблица прогресса пользователя (зависит от users и lessons)
     conn.execute('''
         CREATE TABLE IF NOT EXISTS user_progress (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,50 +122,17 @@ def init_db():
             score INTEGER DEFAULT 0,
             FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
             FOREIGN KEY (lesson_id) REFERENCES lessons (id) ON DELETE CASCADE,
-            UNIQUE(user_id, lesson_id) -- Один пользователь - одна запись прогресса по уроку
+            UNIQUE(user_id, lesson_id)
         )
     ''')
     
-    # ========== ДОБАВЛЕНИЕ ТЕСТОВЫХ ДАННЫХ ==========
-    
-    # 1. Проверяем, есть ли уже курсы в базе, чтобы не добавлять их повторно
-    existing_course = conn.execute('SELECT id FROM courses LIMIT 1').fetchone()
-    
-    if not existing_course:
-        # Добавляем тестовый курс "Основы Python"
-        conn.execute('''
-            INSERT INTO courses (title, description, difficulty_level, order_index)
-            VALUES (?, ?, ?, ?)
-        ''', ('Основы Python', 'Изучите основы Python с нуля. Синтаксис, переменные, функции и многое другое.', 'beginner', 1))
-        
-        # Получаем ID только что созданного курса
-        course_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
-        
-        # Добавляем модуль в этот курс
-        conn.execute('''
-            INSERT INTO modules (course_id, title, description, order_index)
-            VALUES (?, ?, ?, ?)
-        ''', (course_id, 'Введение и основы', 'Первый модуль, который познакомит вас с миром Python.', 1))
-        
-        # Получаем ID созданного модуля
-        module_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
-        
-        # Добавляем несколько уроков в модуль
-        test_lessons = [
-            (module_id, 'Что такое Python?', 'Python — это высокоуровневый язык программирования...', 1, 'theory', None, None),
-            (module_id, 'Первая программа: "Hello, World!"', 'Напишите свою первую программу на Python.', 2, 'practice', 'Hello, World!', 'Используйте функцию print()'),
-            (module_id, 'Переменные и типы данных', 'Узнайте, как хранить информацию в программе.', 3, 'theory', None, None),
-        ]
-        
-        for lesson in test_lessons:
-            conn.execute('''
-                INSERT INTO lessons (module_id, title, content, order_index, lesson_type, expected_output, hints)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', lesson)
-    
     conn.commit()
     conn.close()
-    print("[INFO] База данных инициализирована успешно.")
+    
+    print("[INFO] Таблицы БД созданы успешно")
+    
+    # ТОЛЬКО ПОСЛЕ СОЗДАНИЯ ТАБЛИЦ добавляем тестовые данные
+    add_sample_course_with_exercises()
 
 # ========== ФУНКЦИИ ДЛЯ РАБОТЫ С ПОЛЬЗОВАТЕЛЯМИ ==========
 
@@ -503,116 +483,140 @@ def create_exercise(lesson_id, question, starter_code, solution_code, test_cases
 
 def add_sample_course_with_exercises():
     """
-    Добавляет полный тестовый курс с уроками и упражнениями
+    Добавляет тестовый курс с уроками (вызывается ПОСЛЕ создания таблиц)
     """
     conn = get_db_connection()
     
-    # 1. Создаем курс "Основы Python"
-    conn.execute('''
-        INSERT OR REPLACE INTO courses (id, title, description, difficulty_level, order_index)
-        VALUES (1, 'Основы Python', 'Практический курс для начинающих: от переменных до функций', 'beginner', 1)
-    ''')
-    
-    # 2. Создаем модули
-    modules_data = [
-        (1, 1, 'Введение в Python', 'Основные концепции языка', 1),
-        (2, 1, 'Переменные и типы данных', 'Работа с данными в Python', 2),
-        (3, 1, 'Условные операторы', 'Принятие решений в программах', 3),
-    ]
-    
-    for module_id, course_id, title, description, order in modules_data:
+    try:
+        # Проверяем, есть ли уже курсы
+        existing = conn.execute('SELECT COUNT(*) as count FROM courses').fetchone()
+        
+        if existing and existing['count'] > 0:
+            print("[INFO] Курсы уже существуют, пропускаем создание")
+            return
+        
+        print("[INFO] Создаём тестовый курс...")
+        
+        # 1. Создаем курс
         conn.execute('''
-            INSERT OR REPLACE INTO modules (id, course_id, title, description, order_index)
+            INSERT INTO courses (id, title, description, difficulty_level, order_index)
             VALUES (?, ?, ?, ?, ?)
-        ''', (module_id, course_id, title, description, order))
-    
-    # 3. Создаем уроки с практическими заданиями
-    lessons_data = [
-        # Модуль 1
-        (1, 1, 'Первая программа', 'Напишите программу, которая выводит "Привет, мир!"', 1, 'practice'),
-        (2, 1, 'Чтение ввода', 'Научитесь читать данные от пользователя', 2, 'practice'),
+        ''', (1, 'Python Basics', 'Practical course for beginners: from variables to functions', 'beginner', 1))
         
-        # Модуль 2
-        (3, 2, 'Переменные и присваивание', 'Работа с переменными', 1, 'practice'),
-        (4, 2, 'Арифметические операции', 'Выполнение математических вычислений', 2, 'practice'),
+        # 2. Создаем модули
+        modules = [
+            (1, 1, 'Getting Started', 'Basic Python concepts', 1),
+            (2, 1, 'Variables and Data Types', 'Working with data in Python', 2),
+            (3, 1, 'Control Flow', 'Decision making in programs', 3),
+        ]
         
-        # Модуль 3
-        (5, 3, 'Условие if', 'Простые условия', 1, 'practice'),
-        (6, 3, 'Оператор else', 'Альтернативные пути выполнения', 2, 'practice'),
-    ]
+        for module_id, course_id, title, description, order in modules:
+            conn.execute('''
+                INSERT INTO modules (id, course_id, title, description, order_index)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (module_id, course_id, title, description, order))
+        
+        # 3. Создаем уроки
+        lessons = [
+            # Модуль 1
+            (1, 1, 'First Program', 'Learn how to write and run your first Python program', 1, 'practice'),
+            (2, 1, 'Reading Input', 'Learn to read user input in Python', 2, 'practice'),
+            # Модуль 2
+            (3, 2, 'Variables and Assignment', 'Working with variables and basic operations', 1, 'practice'),
+            (4, 2, 'Arithmetic Operations', 'Performing mathematical calculations', 2, 'practice'),
+            # Модуль 3
+            (5, 3, 'If Statement', 'Simple conditional statements', 1, 'practice'),
+            (6, 3, 'If-Else Statement', 'Making decisions in code', 2, 'practice'),
+        ]
+        
+        for lesson_id, module_id, title, content, order_index, lesson_type in lessons:
+            conn.execute('''
+                INSERT INTO lessons (id, module_id, title, content, order_index, lesson_type)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (lesson_id, module_id, title, content, order_index, lesson_type))
+        
+        conn.commit()
+        print("[INFO] Курс и уроки созданы")
+        
+    except sqlite3.Error as e:
+        print(f"[ERROR] Ошибка при создании курса: {e}")
+        conn.rollback()
+    finally:
+        conn.close()
     
-    for lesson_id, module_id, title, content, order_index, lesson_type in lessons_data:
-        conn.execute('''
-            INSERT OR REPLACE INTO lessons (id, module_id, title, content, order_index, lesson_type)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (lesson_id, module_id, title, content, order_index, lesson_type))
-    
-    conn.commit()
-    conn.close()
-    
-    # 4. Создаем упражнения для каждого урока
+    # 4. Создаем упражнения (отдельно, т.к. есть JSON)
     create_sample_exercises()
-    
-    print("[INFO] Тестовый курс создан успешно")
 
 def create_sample_exercises():
-    """Создает упражнения для тестового курса"""
+    """Создает упражнения для тестового курса (БЕЗ кириллицы в коде)"""
     import json
     
-    # Упражнение 1: Привет, мир!
+    # === УРОК 1: Первая программа ===
     test_cases_1 = [
         {
             "input": "",
-            "output": "Привет, мир!",
+            "output": "Hello, World!",
             "description": "Базовая проверка вывода"
         },
         {
             "input": "",
-            "output": "Привет, мир!\n",
+            "output": "Hello, World!\n",
             "description": "Проверка с переводом строки"
         }
     ]
     
     create_exercise(
         lesson_id=1,
-        question="Напишите программу, которая выводит текст 'Привет, мир!'",
-        starter_code="# Ваша первая программа на Python\n# Напишите код, который выводит 'Привет, мир!'\n\n",
-        solution_code='print("Привет, мир!")',
+        question="Напишите программу, которая выводит текст 'Hello, World!'",
+        starter_code='''# Your first Python program
+# Write code that prints "Hello, World!"
+
+# Example:
+# print("Hello, World!")
+
+# Your code below:''',
+        solution_code='print("Hello, World!")',
         test_cases=test_cases_1
     )
     
-    # Упражнение 2: Чтение ввода и вывод
+    # === УРОК 2: Чтение ввода ===
     test_cases_2 = [
         {
-            "input": "Анна",
-            "output": "Привет, Анна!",
-            "description": "Имя из одного слова"
+            "input": "Alice",
+            "output": "Hello, Alice!",
+            "description": "Одно слово"
         },
         {
-            "input": "Иван Петров",
-            "output": "Привет, Иван Петров!",
-            "description": "Имя из двух слов"
+            "input": "John Doe",
+            "output": "Hello, John Doe!",
+            "description": "Два слова"
         },
         {
             "input": "Python",
-            "output": "Привет, Python!",
-            "description": "Имя-слово"
+            "output": "Hello, Python!",
+            "description": "Слово Python"
         }
     ]
     
     create_exercise(
         lesson_id=2,
-        question="Напишите программу, которая читает имя пользователя и выводит приветствие",
-        starter_code='''# Программа для приветствия пользователя
-# Прочитайте имя из input и выведите "Привет, [имя]!"
+        question="Напишите программу, которая читает имя и выводит приветствие",
+        starter_code='''# Program to greet a user
+# Read a name from input and print "Hello, [name]!"
 
-# Подсказка: используйте input() для чтения и print() для вывода''',
+# Hint: use input() to read and print() to output
+
+# Example solution:
+# name = input()
+# print(f"Hello, {name}!")
+
+# Your code:''',
         solution_code='''name = input()
-print(f"Привет, {name}!")''',
+print(f"Hello, {name}!")''',
         test_cases=test_cases_2
     )
     
-    # Упражнение 3: Сложение чисел
+    # === УРОК 3: Сложение чисел ===
     test_cases_3 = [
         {
             "input": "5\n3",
@@ -634,17 +638,129 @@ print(f"Привет, {name}!")''',
     create_exercise(
         lesson_id=3,
         question="Напишите программу, которая складывает два числа",
-        starter_code='''# Программа для сложения двух чисел
-# Прочитайте два числа из input и выведите их сумму
+        starter_code='''# Program to add two numbers
+# Read two numbers from input and print their sum
 
-# Подсказка: используйте int() для преобразования строк в числа''',
+# Hint: use int() to convert strings to numbers
+
+# Example:
+# a = int(input())
+# b = int(input())
+# print(a + b)
+
+# Your code:''',
         solution_code='''a = int(input())
 b = int(input())
 print(a + b)''',
         test_cases=test_cases_3
     )
     
-    print("[INFO] Тестовые упражнения созданы")
+    # === УРОК 4: Умножение чисел ===
+    test_cases_4 = [
+        {
+            "input": "5\n3",
+            "output": "15",
+            "description": "Умножение положительных"
+        },
+        {
+            "input": "-5\n10",
+            "output": "-50",
+            "description": "Умножение отрицательного и положительного"
+        },
+        {
+            "input": "7\n0",
+            "output": "0",
+            "description": "Умножение на ноль"
+        }
+    ]
+    
+    create_exercise(
+        lesson_id=4,
+        question="Напишите программу, которая умножает два числа",
+        starter_code='''# Program to multiply two numbers
+# Read two numbers and print their product
+
+# Your code here:''',
+        solution_code='''a = int(input())
+b = int(input())
+print(a * b)''',
+        test_cases=test_cases_4
+    )
+    
+    # === УРОК 5: Проверка чётности ===
+    test_cases_5 = [
+        {
+            "input": "4",
+            "output": "even",
+            "description": "Чётное число"
+        },
+        {
+            "input": "7",
+            "output": "odd",
+            "description": "Нечётное число"
+        },
+        {
+            "input": "0",
+            "output": "even",
+            "description": "Ноль - чётное"
+        }
+    ]
+    
+    create_exercise(
+        lesson_id=5,
+        question="Напишите программу, которая определяет чётность числа",
+        starter_code='''# Check if a number is even or odd
+# Read a number, print "even" if even, "odd" if odd
+
+# Hint: use % operator (remainder)
+# Example: 5 % 2 == 1 (odd), 4 % 2 == 0 (even)
+
+# Your code:''',
+        solution_code='''num = int(input())
+if num % 2 == 0:
+    print("even")
+else:
+    print("odd")''',
+        test_cases=test_cases_5
+    )
+    
+    # === УРОК 6: Максимум из двух чисел ===
+    test_cases_6 = [
+        {
+            "input": "5\n3",
+            "output": "5",
+            "description": "Первое число больше"
+        },
+        {
+            "input": "3\n10",
+            "output": "10",
+            "description": "Второе число больше"
+        },
+        {
+            "input": "7\n7",
+            "output": "7",
+            "description": "Числа равны"
+        }
+    ]
+    
+    create_exercise(
+        lesson_id=6,
+        question="Напишите программу, которая находит максимальное из двух чисел",
+        starter_code='''# Find maximum of two numbers
+# Read two numbers, print the larger one
+# If equal, print either one
+
+# Your code:''',
+        solution_code='''a = int(input())
+b = int(input())
+if a >= b:
+    print(a)
+else:
+    print(b)''',
+        test_cases=test_cases_6
+    )
+    
+    print("[INFO] Тестовые упражнения созданы (без кириллицы в коде)")
 
 # Обновим функцию init_db() для создания таблицы упражнений
 def init_db():

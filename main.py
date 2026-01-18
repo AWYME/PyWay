@@ -10,6 +10,9 @@ app.secret_key = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-produ
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SECURE'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400
+app.config['JSON_AS_ASCII'] = False
+app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
+
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -245,13 +248,24 @@ def lesson(lesson_id):
     # Если у урока нет упражнения, используем заглушку
     if not exercise:
         test_cases = [
-            {
-                "input": "",
-                "output": "Пример вывода",
-                "description": "Тестовый пример"
-            }
-        ]
-        starter_code = "# Этот урок пока не имеет задания\n# Скоро здесь появится упражнение!"
+    {
+        "input": "",
+        "output": "Hello, World!",
+        "description": "Basic output test"
+    },
+    {
+        "input": "",
+        "output": "Hello, World!\n",
+        "description": "Test with newline"
+    }
+]
+        starter_code = '''# Your first Python program
+# Write code that prints "Hello, World!"
+
+# Example solution:
+# print("Hello, World!")
+
+# Your code below:'''
         question = "Задание для этого урока находится в разработке"
     else:
         test_cases = exercise.get('test_cases', [])
