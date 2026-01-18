@@ -5,6 +5,14 @@
 {% block content %}
 <div class="lesson-container">
     <div class="lesson-header">
+        <div class="breadcrumbs">
+            <a href="{{ url_for('courses') }}">Курсы</a> / 
+            <a href="{{ url_for('course_detail', course_id=course.id if course else 1) }}">
+                {{ course_title }}
+            </a> / 
+            <span>{{ lesson.title }}</span>
+        </div>
+        
         <h1>{{ lesson.title }}</h1>
         <div class="lesson-meta">
             <span class="module-badge">Модуль: {{ module_title }}</span>
@@ -26,9 +34,10 @@
                 <div class="assignment">
                     <h3>🎯 Задание</h3>
                     <div class="assignment-description">
-                        {{ assignment_description|default("Напишите код для решения задачи ниже") }}
+                        {{ question|default("Напишите код для решения задачи") }}
                     </div>
                     
+                    {% if test_cases %}
                     <div class="examples">
                         <h4>📋 Примеры работы программы:</h4>
                         <table class="examples-table">
@@ -36,13 +45,50 @@
                                 <tr>
                                     <th>Входные данные (input)</th>
                                     <th>Ожидаемый вывод (output)</th>
+                                    <th>Описание</th>
                                 </tr>
                             </thead>
                             <tbody id="test-cases-list">
-                                <!-- Тестовые случаи будут добавлены через JavaScript -->
+                                {% for test in test_cases %}
+                                <tr>
+                                    <td>
+                                        <div class="test-case-input">
+                                            {{ test.input|replace('\n', '<br>')|safe if test.input else "(пусто)" }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="test-case-output">
+                                            {{ test.output }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <small>{{ test.description|default("Тест " ~ loop.index) }}</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
                             </tbody>
                         </table>
                     </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Навигация по урокам -->
+                <div class="lesson-navigation">
+                    {% if prev_lesson %}
+                    <a href="{{ url_for('lesson', lesson_id=prev_lesson.id) }}" class="btn btn-secondary">
+                        ← {{ prev_lesson.title[:30] }}...
+                    </a>
+                    {% endif %}
+                    
+                    {% if next_lesson %}
+                    <a href="{{ url_for('lesson', lesson_id=next_lesson.id) }}" class="btn btn-primary" style="margin-left: auto;">
+                        {{ next_lesson.title[:30] }}... →
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('courses') }}" class="btn btn-primary" style="margin-left: auto;">
+                        Завершить модуль
+                    </a>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -53,10 +99,13 @@
                 <h2>💻 Редактор кода</h2>
                 <div class="editor-controls">
                     <button id="run-btn" class="btn btn-primary">
-                        ▶ Запустить код
+                        ▶ Запустить тесты
                     </button>
                     <button id="reset-btn" class="btn btn-secondary">
                         ↺ Сбросить код
+                    </button>
+                    <button id="show-solution-btn" class="btn btn-outline">
+                        👁️ Показать решение
                     </button>
                 </div>
             </div>
@@ -67,16 +116,20 @@
             <div class="editor-footer">
                 <div class="hint-box">
                     <strong>💡 Подсказка:</strong>
-                    <span id="hint-text">{{ lesson.hints|default("Используйте print() для вывода результата") }}</span>
+                    <span id="hint-text">
+                        {% if lesson.hints %}{{ lesson.hints }}{% else %}
+                        Используйте print() для вывода результата. Тестируйте код на всех примерах!
+                        {% endif %}
+                    </span>
                 </div>
             </div>
 
             <!-- Консоль с результатами -->
             <div class="console-section">
                 <div class="console-header">
-                    <h3>📊 Результаты выполнения</h3>
+                    <h3>📊 Результаты тестирования</h3>
                     <div class="console-stats">
-                        <span id="test-count">Тестов: 0</span>
+                        <span id="test-count">Тестов: {{ test_cases|length }}</span>
                         <span id="passed-count">✅ Пройдено: 0</span>
                         <span id="failed-count">❌ Не пройдено: 0</span>
                     </div>
@@ -84,9 +137,8 @@
                 
                 <div class="console-output">
                     <div id="test-results">
-                        <!-- Здесь будут отображаться результаты тестов -->
                         <div class="empty-results">
-                            <p>Запустите код, чтобы увидеть результаты тестирования</p>
+                            <p>Запустите тесты, чтобы проверить ваше решение</p>
                         </div>
                     </div>
                     
@@ -101,16 +153,17 @@
                     </div>
                 </div>
                 
-                <!-- Кнопка завершения урока (показывается после успешного прохождения) -->
                 <div id="completion-section" style="display: none;">
                     <div class="success-message">
                         <h3>🎉 Поздравляем!</h3>
                         <p>Вы успешно выполнили все тесты для этого урока.</p>
                         <form method="POST" action="{{ url_for('complete_lesson', lesson_id=lesson.id) }}">
+                            <input type="hidden" name="code" id="final-code-input">
                             <button type="submit" class="btn btn-success">
-                                ✅ Завершить урок
+                                ✅ Завершить урок и сохранить код
                             </button>
                         </form>
+                        <p class="small-text">Ваш код будет сохранён в истории выполнения</p>
                     </div>
                 </div>
             </div>
@@ -118,29 +171,49 @@
     </div>
 </div>
 
-<!-- Подключаем библиотеки для редактора кода -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/python/python.min.js"></script>
 
-<!-- Подключаем наши скрипты и стили для редактора -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/editor.css') }}">
-<script src="{{ url_for('static', filename='js/editor.js') }}"></script>
-
-<!-- Передаем данные из Flask в JavaScript через JSON -->
 <script type="application/json" id="lesson-config">
 {
     "lessonId": {{ lesson.id }},
-    "defaultCode": {{ starter_code|default("# Напишите ваш код здесь\\n# Используйте print() для вывода результата\\n\\n# Пример решения:\\ndef solve():\\n    # Ваш код здесь\\n    pass\\n\\nif __name__ == \"__main__\":\\n    solve()")|tojson|safe }},
+    "defaultCode": {{ starter_code|tojson|safe }},
     "testCases": {{ test_cases|tojson|safe }},
     "isCompleted": {{ lesson_completed|tojson }},
     "apiUrl": "{{ url_for('execute_code') }}"
 }
 </script>
 
+<link rel="stylesheet" href="{{ url_for('static', filename='css/editor.css') }}">
+<script src="{{ url_for('static', filename='js/editor.js') }}"></script>
+
 <script>
-// Чтение конфигурации из JSON
-const lessonConfig = JSON.parse(document.getElementById('lesson-config').textContent);
-</script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('show-solution-btn')?.addEventListener('click', function() {
+        if (confirm('Показать решение? Вы потеряете возможность решить задачу самостоятельно.')) {
+            const solutions = {
+                1: 'print("Привет, мир!")',
+                2: 'name = input()\nprint(f"Привет, {name}!")',
+                3: 'a = int(input())\nb = int(input())\nprint(a + b)'
+            };
+            
+            const lessonId = window.lessonConfig?.lessonId || lessonConfig?.lessonId;
+            
+            const solution = solutions[lessonId] || "# Решение для этого урока пока не доступно";
+            
+            if (codeEditor) {
+                codeEditor.setValue(solution);
+            }
+        }
+    });
+    
+    document.querySelector('form')?.addEventListener('submit', function() {
+        const finalCodeInput = document.getElementById('final-code-input');
+        if (finalCodeInput && codeEditor) {
+            finalCodeInput.value = codeEditor.getValue();
+        }
+    });
+});</script>
 {% endblock %}

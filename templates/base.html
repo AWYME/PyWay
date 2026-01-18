@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}*Вставить название*{% endblock %}</title>
+    <title>{% block title %}Pyway{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -11,7 +11,7 @@
             <a href="{{ url_for('index') }}" class="logo">PyWay</a>
             <div class="nav-links">
                 <a href="{{ url_for('courses') }}">Курсы</a>
-                {% if session.get['id'] %}
+                {% if session.get['email'] %}
                     <a href="{{ url_for('profile') }}">Профиль</a>
                     <a href="{{ url_for('logout') }}">Выйти</a>
                 {% else %}

@@ -429,3 +429,250 @@ def get_user_profile(user_id):
     
     conn.close()
     return profile_data
+
+# ========== ФУНКЦИИ ДЛЯ УПРАЖНЕНИЙ И ТЕСТОВ ==========
+
+def get_exercise_for_lesson(lesson_id):
+    """
+    Получает упражнение для урока с тестовыми случаями
+    
+    Args:
+        lesson_id (int): ID урока
+    
+    Returns:
+        dict: Данные упражнения с тестами или None
+    """
+    conn = get_db_connection()
+    
+    # Ищем упражнение для этого урока
+    exercise = conn.execute('''
+        SELECT * FROM exercises 
+        WHERE lesson_id = ?
+    ''', (lesson_id,)).fetchone()
+    
+    if not exercise:
+        conn.close()
+        return None
+    
+    # Парсим тест-кейсы из JSON
+    import json
+    test_cases = []
+    if exercise['test_cases']:
+        try:
+            test_cases = json.loads(exercise['test_cases'])
+        except:
+            test_cases = []
+    
+    result = dict(exercise)
+    result['test_cases'] = test_cases
+    result['parsed_test_cases'] = test_cases
+    
+    conn.close()
+    return result
+
+def create_exercise(lesson_id, question, starter_code, solution_code, test_cases):
+    """
+    Создает упражнение для урока
+    
+    Args:
+        lesson_id (int): ID урока
+        question (str): Вопрос/описание задачи
+        starter_code (str): Начальный код для редактора
+        solution_code (str): Правильное решение
+        test_cases (list): Список тестовых случаев
+    
+    Returns:
+        int: ID созданного упражнения
+    """
+    conn = get_db_connection()
+    
+    # Конвертируем тест-кейсы в JSON
+    import json
+    test_cases_json = json.dumps(test_cases, ensure_ascii=False)
+    
+    cursor = conn.execute('''
+        INSERT INTO exercises (lesson_id, question, starter_code, solution_code, test_cases)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (lesson_id, question, starter_code, solution_code, test_cases_json))
+    
+    exercise_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    return exercise_id
+
+def add_sample_course_with_exercises():
+    """
+    Добавляет полный тестовый курс с уроками и упражнениями
+    """
+    conn = get_db_connection()
+    
+    # 1. Создаем курс "Основы Python"
+    conn.execute('''
+        INSERT OR REPLACE INTO courses (id, title, description, difficulty_level, order_index)
+        VALUES (1, 'Основы Python', 'Практический курс для начинающих: от переменных до функций', 'beginner', 1)
+    ''')
+    
+    # 2. Создаем модули
+    modules_data = [
+        (1, 1, 'Введение в Python', 'Основные концепции языка', 1),
+        (2, 1, 'Переменные и типы данных', 'Работа с данными в Python', 2),
+        (3, 1, 'Условные операторы', 'Принятие решений в программах', 3),
+    ]
+    
+    for module_id, course_id, title, description, order in modules_data:
+        conn.execute('''
+            INSERT OR REPLACE INTO modules (id, course_id, title, description, order_index)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (module_id, course_id, title, description, order))
+    
+    # 3. Создаем уроки с практическими заданиями
+    lessons_data = [
+        # Модуль 1
+        (1, 1, 'Первая программа', 'Напишите программу, которая выводит "Привет, мир!"', 1, 'practice'),
+        (2, 1, 'Чтение ввода', 'Научитесь читать данные от пользователя', 2, 'practice'),
+        
+        # Модуль 2
+        (3, 2, 'Переменные и присваивание', 'Работа с переменными', 1, 'practice'),
+        (4, 2, 'Арифметические операции', 'Выполнение математических вычислений', 2, 'practice'),
+        
+        # Модуль 3
+        (5, 3, 'Условие if', 'Простые условия', 1, 'practice'),
+        (6, 3, 'Оператор else', 'Альтернативные пути выполнения', 2, 'practice'),
+    ]
+    
+    for lesson_id, module_id, title, content, order_index, lesson_type in lessons_data:
+        conn.execute('''
+            INSERT OR REPLACE INTO lessons (id, module_id, title, content, order_index, lesson_type)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (lesson_id, module_id, title, content, order_index, lesson_type))
+    
+    conn.commit()
+    conn.close()
+    
+    # 4. Создаем упражнения для каждого урока
+    create_sample_exercises()
+    
+    print("[INFO] Тестовый курс создан успешно")
+
+def create_sample_exercises():
+    """Создает упражнения для тестового курса"""
+    import json
+    
+    # Упражнение 1: Привет, мир!
+    test_cases_1 = [
+        {
+            "input": "",
+            "output": "Привет, мир!",
+            "description": "Базовая проверка вывода"
+        },
+        {
+            "input": "",
+            "output": "Привет, мир!\n",
+            "description": "Проверка с переводом строки"
+        }
+    ]
+    
+    create_exercise(
+        lesson_id=1,
+        question="Напишите программу, которая выводит текст 'Привет, мир!'",
+        starter_code="# Ваша первая программа на Python\n# Напишите код, который выводит 'Привет, мир!'\n\n",
+        solution_code='print("Привет, мир!")',
+        test_cases=test_cases_1
+    )
+    
+    # Упражнение 2: Чтение ввода и вывод
+    test_cases_2 = [
+        {
+            "input": "Анна",
+            "output": "Привет, Анна!",
+            "description": "Имя из одного слова"
+        },
+        {
+            "input": "Иван Петров",
+            "output": "Привет, Иван Петров!",
+            "description": "Имя из двух слов"
+        },
+        {
+            "input": "Python",
+            "output": "Привет, Python!",
+            "description": "Имя-слово"
+        }
+    ]
+    
+    create_exercise(
+        lesson_id=2,
+        question="Напишите программу, которая читает имя пользователя и выводит приветствие",
+        starter_code='''# Программа для приветствия пользователя
+# Прочитайте имя из input и выведите "Привет, [имя]!"
+
+# Подсказка: используйте input() для чтения и print() для вывода''',
+        solution_code='''name = input()
+print(f"Привет, {name}!")''',
+        test_cases=test_cases_2
+    )
+    
+    # Упражнение 3: Сложение чисел
+    test_cases_3 = [
+        {
+            "input": "5\n3",
+            "output": "8",
+            "description": "Сложение положительных чисел"
+        },
+        {
+            "input": "-5\n10",
+            "output": "5",
+            "description": "Сложение отрицательного и положительного"
+        },
+        {
+            "input": "0\n0",
+            "output": "0",
+            "description": "Сложение нулей"
+        }
+    ]
+    
+    create_exercise(
+        lesson_id=3,
+        question="Напишите программу, которая складывает два числа",
+        starter_code='''# Программа для сложения двух чисел
+# Прочитайте два числа из input и выведите их сумму
+
+# Подсказка: используйте int() для преобразования строк в числа''',
+        solution_code='''a = int(input())
+b = int(input())
+print(a + b)''',
+        test_cases=test_cases_3
+    )
+    
+    print("[INFO] Тестовые упражнения созданы")
+
+# Обновим функцию init_db() для создания таблицы упражнений
+def init_db():
+    """
+    Инициализирует базу данных: создает все необходимые таблицы
+    """
+    conn = get_db_connection()
+    
+    # Включаем поддержку внешних ключей
+    conn.execute("PRAGMA foreign_keys = ON")
+    
+    # СОЗДАЕМ ТАБЛИЦУ УПРАЖНЕНИЙ (добавляем к существующим)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS exercises (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lesson_id INTEGER NOT NULL,
+            question TEXT NOT NULL,
+            starter_code TEXT,
+            solution_code TEXT NOT NULL,
+            test_cases TEXT,
+            difficulty VARCHAR(20) DEFAULT 'easy',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (lesson_id) REFERENCES lessons (id) ON DELETE CASCADE
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+    
+    # Добавляем тестовый курс
+    add_sample_course_with_exercises()

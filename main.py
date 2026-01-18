@@ -8,8 +8,8 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SECURE'] = False  # True для production с HTTPS
-app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 часа
+app.config['SESSION_COOKIE_SECURE'] = False
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
@@ -123,11 +123,16 @@ def signup():
             flash('Пароль должен содержать минимум 6 символов.', 'error')
             return render_template('auth/signup.html')
         
-        user_id = create_user(username, email, password)
+        user = create_user(username, email, password)
+
         
-        if user_id:
-            flash('Регистрация успешна! Теперь вы можете войти в систему.', 'success')
-            return redirect(url_for('login'))
+        if user:
+            flash('Регистрация успешна!', 'success')
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            session['email'] = user['email']
+            session.permanent = True
+            return redirect(url_for('index'))
         else:
             flash('Пользователь с таким именем или email уже существует.', 'error')
     
@@ -208,76 +213,65 @@ def course_detail(course_id):
 def lesson(lesson_id):
     """
     Страница урока с редактором кода
-    GET-запрос: отображение урока
     """
+    # Получаем данные урока
     lesson_data = get_lesson(lesson_id)
     
     if not lesson_data:
         flash('Урок не найден.', 'error')
         return redirect(url_for('courses'))
     
+    # Получаем информацию о модуле и курсе
     conn = get_db_connection()
     module = conn.execute('SELECT * FROM modules WHERE id = ?', 
                          (lesson_data['module_id'],)).fetchone()
     course = conn.execute('SELECT * FROM courses WHERE id = ?', 
                          (module['course_id'],)).fetchone()
+    
+    # Получаем упражнение для этого урока
+    exercise = get_exercise_for_lesson(lesson_id)
     conn.close()
     
-    user_progress = get_user_progress(session['user_id'])
-    lesson_completed = False
+    # Проверяем, пройден ли урок
+    conn = get_db_connection()
+    progress = conn.execute('''
+        SELECT completed FROM user_progress 
+        WHERE user_id = ? AND lesson_id = ?
+    ''', (session['user_id'], lesson_id)).fetchone()
+    conn.close()
     
-    if isinstance(user_progress, list):
-        lesson_completed = any(
-            p['id'] == lesson_id and p.get('completed') 
-            for p in user_progress
-        )
+    lesson_completed = bool(progress and progress['completed'])
+    
+    # Если у урока нет упражнения, используем заглушку
+    if not exercise:
+        test_cases = [
+            {
+                "input": "",
+                "output": "Пример вывода",
+                "description": "Тестовый пример"
+            }
+        ]
+        starter_code = "# Этот урок пока не имеет задания\n# Скоро здесь появится упражнение!"
+        question = "Задание для этого урока находится в разработке"
     else:
-        conn = get_db_connection()
-        progress = conn.execute('''
-            SELECT completed FROM user_progress 
-            WHERE user_id = ? AND lesson_id = ?
-        ''', (session['user_id'], lesson_id)).fetchone()
-        conn.close()
-        
-        lesson_completed = bool(progress and progress['completed'])
+        test_cases = exercise.get('test_cases', [])
+        starter_code = exercise.get('starter_code', '')
+        question = exercise.get('question', '')
     
-    #TODO: Заменить на данные с бд
-    test_cases = [
-        {
-            "input": "5\n3",
-            "output": "8",
-            "description": "Сложение двух положительных чисел"
-        },
-        {
-            "input": "-5\n10",
-            "output": "5",
-            "description": "Сложение отрицательного и положительного"
-        },
-        {
-            "input": "0\n0",
-            "output": "0",
-            "description": "Сложение нулей"
-        }
-    ]
+    # Получаем следующий и предыдущий уроки для навигации
+    conn = get_db_connection()
+    next_lesson = conn.execute('''
+        SELECT id, title FROM lessons 
+        WHERE module_id = ? AND order_index > ? 
+        ORDER BY order_index LIMIT 1
+    ''', (lesson_data['module_id'], lesson_data['order_index'])).fetchone()
     
-    starter_code = '''# Напишите программу для сложения двух чисел
-
-def add_numbers(a, b):
-    """Возвращает сумму двух чисел"""
-    # Ваш код здесь
-    return a + b
-
-if __name__ == "__main__":
-    # Чтение входных данных
-    try:
-        num1 = int(input())
-        num2 = int(input())
-        
-        # Вычисление и вывод результата
-        result = add_numbers(num1, num2)
-        print(result)
-    except ValueError:
-        print("Ошибка: введите целые числа")'''
+    prev_lesson = conn.execute('''
+        SELECT id, title FROM lessons 
+        WHERE module_id = ? AND order_index < ? 
+        ORDER BY order_index DESC LIMIT 1
+    ''', (lesson_data['module_id'], lesson_data['order_index'])).fetchone()
+    conn.close()
     
     return render_template('lesson.html',
                          lesson=lesson_data,
@@ -285,7 +279,10 @@ if __name__ == "__main__":
                          course_title=course['title'],
                          lesson_completed=lesson_completed,
                          test_cases=test_cases,
-                         starter_code=starter_code)
+                         starter_code=starter_code,
+                         question=question,
+                         next_lesson=next_lesson,
+                         prev_lesson=prev_lesson)
 
 @app.route('/lesson/<int:lesson_id>/complete', methods=['POST'])
 @login_required
@@ -342,7 +339,6 @@ def execute_code():
         'timestamp': datetime.now().isoformat()
     })
 
-#TODO: При доработке бд заменить тестовые данные на данные с бд
 @app.route('/api/lesson/<int:lesson_id>/tests')
 @login_required
 def get_lesson_tests(lesson_id):
@@ -409,3 +405,48 @@ if __name__ == '__main__':
         debug=True,
         threaded=True
     )
+
+@app.route('/api/lesson/<int:lesson_id>/save-code', methods=['POST'])
+@login_required
+def save_lesson_code(lesson_id):
+    """Сохранение кода пользователя для урока"""
+    if not request.is_json:
+        return jsonify({'error': 'Invalid content type'}), 400
+    
+    data = request.get_json()
+    code = data.get('code', '')
+    
+    if not code:
+        return jsonify({'error': 'Code is empty'}), 400
+    
+    # Сохраняем код в прогресс пользователя
+    conn = get_db_connection()
+    conn.execute('''
+        INSERT OR REPLACE INTO user_progress 
+        (user_id, lesson_id, code_submission, completed)
+        VALUES (?, ?, ?, ?)
+    ''', (session['user_id'], lesson_id, code, False))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'Код сохранён'})
+
+@app.route('/api/lesson/<int:lesson_id>/get-code', methods=['GET'])
+@login_required
+def get_saved_code(lesson_id):
+    """Получение сохранённого кода пользователя"""
+    conn = get_db_connection()
+    progress = conn.execute('''
+        SELECT code_submission FROM user_progress 
+        WHERE user_id = ? AND lesson_id = ?
+    ''', (session['user_id'], lesson_id)).fetchone()
+    conn.close()
+    
+    if progress and progress['code_submission']:
+        return jsonify({
+            'success': True,
+            'code': progress['code_submission']
+        })
+    
+    return jsonify({'success': False, 'code': ''})

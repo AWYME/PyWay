@@ -3,7 +3,7 @@
  * Аналогичен редактору в Яндекс.Учебнике
  */
 
-// Глобальные переменны редактора
+// Глобальные переменные редактора
 let codeEditor;
 let testCases = [];
 let isLessonCompleted = false;
@@ -13,6 +13,14 @@ document.addEventListener('DOMContentLoaded', function() {
     initEditor();
     initTestCases();
     setupEventListeners();
+    
+    // Загружаем сохранённый код из БД при загрузке страницы
+    loadSavedCode(lessonConfig.lessonId).then(loaded => {
+        if (!loaded) {
+            // Если нет сохранённого кода, загружаем из localStorage
+            loadCodeFromStorage();
+        }
+    });
     
     // Если урок уже пройден, показываем сообщение
     if (lessonConfig.isCompleted) {
@@ -165,6 +173,20 @@ async function executeCode() {
     // Проверяем, пройдены ли все тесты
     if (passedTests === testCases.length && testCases.length > 0) {
         showCompletionSection();
+        
+        // Автоматически заполняем поле с кодом для отправки формы
+        const finalCodeInput = document.getElementById('final-code-input');
+        if (finalCodeInput) {
+            finalCodeInput.value = code;
+        }
+        
+        // Сохраняем код в БД через API (опционально)
+        try {
+            await saveUserCode(lessonConfig.lessonId, code);
+        } catch (saveError) {
+            console.log('Код не сохранён в историю:', saveError);
+            // Не блокируем пользователя при ошибке сохранения
+        }
     }
     
     // Восстанавливаем кнопку и скрываем индикатор
@@ -348,5 +370,61 @@ function loadCodeFromStorage() {
         if (confirm('Найден сохраненный код. Загрузить его?')) {
             codeEditor.setValue(savedCode);
         }
+    }
+}
+
+/**
+ * Сохранение кода пользователя в БД через API
+ * @param {number} lessonId - ID урока
+ * @param {string} code - Код пользователя
+ */
+async function saveUserCode(lessonId, code) {
+    try {
+        const response = await fetch(`/api/lesson/${lessonId}/save-code`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                code: code,
+                completed_tests: testCases.length // Можно передать количество пройденных тестов
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('Код успешно сохранён в БД');
+            return result;
+        } else {
+            console.warn('Не удалось сохранить код:', result.message);
+            return null;
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения кода в БД:', error);
+        return null;
+    }
+}
+
+/**
+ * Загрузка сохранённого кода из БД
+ * @param {number} lessonId - ID урока
+ */
+async function loadSavedCode(lessonId) {
+    try {
+        const response = await fetch(`/api/lesson/${lessonId}/get-code`);
+        const result = await response.json();
+        
+        if (result.success && result.code && result.code.trim() !== '') {
+            // Предлагаем загрузить сохранённый код
+            if (confirm('Найден сохранённый код для этого урока. Загрузить его?')) {
+                codeEditor.setValue(result.code);
+                return true;
+            }
+        }
+        return false;
+    } catch (error) {
+        console.log('Не удалось загрузить сохранённый код:', error);
+        return false;
     }
 }
