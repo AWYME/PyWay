@@ -13,7 +13,6 @@ app.config['PERMANENT_SESSION_LIFETIME'] = 86400
 app.config['JSON_AS_ASCII'] = False
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
 
-
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 def login_required(f):
@@ -21,7 +20,7 @@ def login_required(f):
     
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
+        if 'id' not in session:
             flash('Для доступа к этой странице необходимо войти в систему.', 'error')
             return redirect(url_for('login'))
         return f(*args, **kwargs)
@@ -61,7 +60,7 @@ def execute_python_code(code, user_input=""):
     except Exception as e:
         return f"Системная ошибка: {str(e)}"
 
-def get_user_progress_summary(user_id):
+def get_user_progress_summary(id):
     conn = get_db_connection()
     
     stats = conn.execute('''
@@ -76,7 +75,7 @@ def get_user_progress_summary(user_id):
         LEFT JOIN user_progress up ON l.id = up.lesson_id AND up.user_id = ?
         WHERE u.id = ?
         GROUP BY u.id
-    ''', (user_id, user_id)).fetchone()
+    ''', (id, id)).fetchone()
     
     conn.close()
     
@@ -100,8 +99,8 @@ def index():
     courses = get_all_courses()
     user_stats = None
     
-    if 'user_id' in session:
-        user_stats = get_user_progress_summary(session['user_id'])
+    if 'id' in session:
+        user_stats = get_user_progress_summary(session['id'])
     
     return render_template('index.html', 
                          courses=courses, 
@@ -110,7 +109,7 @@ def index():
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
-    if 'user_id' in session:
+    if 'id' in session:
         return redirect(url_for('index'))
     
     if request.method == 'POST':
@@ -143,7 +142,7 @@ def signup():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if 'user_id' in session:
+    if 'id' in session:
         return redirect(url_for('index'))
     
     if request.method == 'POST':
@@ -153,7 +152,7 @@ def login():
         user = get_user_by_email(email)
         
         if user and verify_password(user, password):
-            session['user_id'] = user['id']
+            session['id'] = user['id']
             session['username'] = user['username']
             session['email'] = user['email']
             session.permanent = True
@@ -188,7 +187,7 @@ def courses():
     user_progress = {}
     
     for course in courses_list:
-        progress = get_user_progress(session['user_id'], course['id'])
+        progress = get_user_progress(session['id'], course['id'])
         user_progress[course['id']] = progress
     
     return render_template('courses.html', 
@@ -205,7 +204,7 @@ def course_detail(course_id):
         flash('Курс не найден.', 'error')
         return redirect(url_for('courses'))
     
-    progress_data = get_user_progress(session['user_id'], course_id)
+    progress_data = get_user_progress(session['id'], course_id)
     
     return render_template('course_detail.html',
                          course=course_data,
@@ -239,8 +238,8 @@ def lesson(lesson_id):
     conn = get_db_connection()
     progress = conn.execute('''
         SELECT completed FROM user_progress 
-        WHERE user_id = ? AND lesson_id = ?
-    ''', (session['user_id'], lesson_id)).fetchone()
+        WHERE id = ? AND lesson_id = ?
+    ''', (session['id'], lesson_id)).fetchone()
     conn.close()
     
     lesson_completed = bool(progress and progress['completed'])
@@ -309,7 +308,7 @@ def complete_lesson(lesson_id):
         code_submission = request.form.get('code', '')
         
         update_user_progress(
-            session['user_id'], 
+            session['id'], 
             lesson_id, 
             code_submission=code_submission if code_submission else None,
             completed=True
@@ -375,12 +374,12 @@ def get_lesson_tests(lesson_id):
 @login_required
 def profile():
     """Страница профиля пользователя"""
-    user_data = get_user_profile(session['user_id'])
+    user_data = get_user_profile(session['id'])
     
     if not user_data:
         flash('Профиль не найден.', 'error')
         return redirect(url_for('index'))
-    progress_stats = get_user_progress_summary(session['user_id'])
+    progress_stats = get_user_progress_summary(session['id'])
     conn = get_db_connection()
     recent_lessons = conn.execute('''
         SELECT l.title, up.completed_at, m.title as module_title
@@ -390,7 +389,7 @@ def profile():
         WHERE up.user_id = ? AND up.completed = TRUE
         ORDER BY up.completed_at DESC
         LIMIT 5
-    ''', (session['user_id'],)).fetchall()
+    ''', (session['id'],)).fetchall()
     conn.close()
     
     return render_template('profile.html',
@@ -439,7 +438,7 @@ def save_lesson_code(lesson_id):
         INSERT OR REPLACE INTO user_progress 
         (user_id, lesson_id, code_submission, completed)
         VALUES (?, ?, ?, ?)
-    ''', (session['user_id'], lesson_id, code, False))
+    ''', (session['id'], lesson_id, code, False))
     
     conn.commit()
     conn.close()
@@ -454,7 +453,7 @@ def get_saved_code(lesson_id):
     progress = conn.execute('''
         SELECT code_submission FROM user_progress 
         WHERE user_id = ? AND lesson_id = ?
-    ''', (session['user_id'], lesson_id)).fetchone()
+    ''', (session['id'], lesson_id)).fetchone()
     conn.close()
     
     if progress and progress['code_submission']:
