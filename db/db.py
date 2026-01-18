@@ -373,314 +373,41 @@ def create_exercise(lesson_id, question, starter_code, solution_code, test_cases
     
     return exercise_id
 
-def add_sample_course_with_exercises():
-    """
-    Добавляет тестовый курс с уроками (вызывается ПОСЛЕ создания таблиц)
-    """
+def get_user_progress_summary(user_id):
+    """Получает сводную информацию о прогрессе пользователя"""
     conn = get_db_connection()
     
     try:
-        # Проверяем, есть ли уже курсы
-        existing = conn.execute('SELECT COUNT(*) as count FROM courses').fetchone()
+        # Общая статистика
+        stats = conn.execute('''
+            SELECT 
+                COUNT(DISTINCT l.id) as total_lessons,
+                COUNT(DISTINCT up.lesson_id) as completed_lessons,
+                COALESCE(SUM(up.score), 0) as total_score,
+                u.experience,
+                u.level
+            FROM lessons l
+            CROSS JOIN users u
+            LEFT JOIN user_progress up ON l.id = up.lesson_id AND up.user_id = u.id AND up.completed = TRUE
+            WHERE u.id = ?
+            GROUP BY u.id
+        ''', (user_id,)).fetchone()
         
-        if existing and existing['count'] > 0:
-            print("[INFO] Курсы уже существуют, пропускаем создание")
-            return
+        if stats:
+            progress_percent = (stats['completed_lessons'] / stats['total_lessons'] * 100) if stats['total_lessons'] > 0 else 0
+            return {
+                'total_lessons': stats['total_lessons'],
+                'completed_lessons': stats['completed_lessons'],
+                'progress_percent': round(progress_percent, 1),
+                'total_score': stats['total_score'],
+                'experience': stats['experience'],
+                'level': stats['level']
+            }
         
-        print("[INFO] Создаём тестовый курс...")
+        return None
         
-        # 1. Создаем курс
-        conn.execute('''
-            INSERT INTO courses (id, title, description, difficulty_level, order_index)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (1, 'Python Basics', 'Practical course for beginners: from variables to functions', 'beginner', 1))
-        
-        # 2. Создаем модули
-        modules = [
-            (1, 1, 'Getting Started', 'Basic Python concepts', 1),
-            (2, 1, 'Variables and Data Types', 'Working with data in Python', 2),
-            (3, 1, 'Control Flow', 'Decision making in programs', 3),
-        ]
-        
-        for module_id, course_id, title, description, order in modules:
-            conn.execute('''
-                INSERT INTO modules (id, course_id, title, description, order_index)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (module_id, course_id, title, description, order))
-        
-        # 3. Создаем уроки
-        lessons = [
-            # Модуль 1
-            (1, 1, 'First Program', 'Learn how to write and run your first Python program', 1, 'practice'),
-            (2, 1, 'Reading Input', 'Learn to read user input in Python', 2, 'practice'),
-            # Модуль 2
-            (3, 2, 'Variables and Assignment', 'Working with variables and basic operations', 1, 'practice'),
-            (4, 2, 'Arithmetic Operations', 'Performing mathematical calculations', 2, 'practice'),
-            # Модуль 3
-            (5, 3, 'If Statement', 'Simple conditional statements', 1, 'practice'),
-            (6, 3, 'If-Else Statement', 'Making decisions in code', 2, 'practice'),
-        ]
-        
-        for lesson_id, module_id, title, content, order_index, lesson_type in lessons:
-            conn.execute('''
-                INSERT INTO lessons (id, module_id, title, content, order_index, lesson_type)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (lesson_id, module_id, title, content, order_index, lesson_type))
-        
-        conn.commit()
-        print("[INFO] Курс и уроки созданы")
-        
-    except sqlite3.Error as e:
-        print(f"[ERROR] Ошибка при создании курса: {e}")
-        conn.rollback()
+    except Exception as e:
+        print(f"[ERROR] Ошибка при получении статистики: {e}")
+        return None
     finally:
         conn.close()
-    
-    # 4. Создаем упражнения (отдельно, т.к. есть JSON)
-    create_sample_exercises()
-
-def create_sample_exercises():
-    """Создает упражнения для тестового курса (БЕЗ кириллицы в коде)"""
-    import json
-    
-    # === УРОК 1: Первая программа ===
-    test_cases_1 = [
-        {
-            "input": "",
-            "output": "Hello, World!",
-            "description": "Базовая проверка вывода"
-        },
-        {
-            "input": "",
-            "output": "Hello, World!\n",
-            "description": "Проверка с переводом строки"
-        }
-    ]
-    
-    create_exercise(
-        lesson_id=1,
-        question="Напишите программу, которая выводит текст 'Hello, World!'",
-        starter_code='''# Your first Python program
-# Write code that prints "Hello, World!"
-
-# Example:
-# print("Hello, World!")
-
-# Your code below:''',
-        solution_code='print("Hello, World!")',
-        test_cases=test_cases_1
-    )
-    
-    # === УРОК 2: Чтение ввода ===
-    test_cases_2 = [
-        {
-            "input": "Alice",
-            "output": "Hello, Alice!",
-            "description": "Одно слово"
-        },
-        {
-            "input": "John Doe",
-            "output": "Hello, John Doe!",
-            "description": "Два слова"
-        },
-        {
-            "input": "Python",
-            "output": "Hello, Python!",
-            "description": "Слово Python"
-        }
-    ]
-    
-    create_exercise(
-        lesson_id=2,
-        question="Напишите программу, которая читает имя и выводит приветствие",
-        starter_code='''# Program to greet a user
-# Read a name from input and print "Hello, [name]!"
-
-# Hint: use input() to read and print() to output
-
-# Example solution:
-# name = input()
-# print(f"Hello, {name}!")
-
-# Your code:''',
-        solution_code='''name = input()
-print(f"Hello, {name}!")''',
-        test_cases=test_cases_2
-    )
-    
-    # === УРОК 3: Сложение чисел ===
-    test_cases_3 = [
-        {
-            "input": "5\n3",
-            "output": "8",
-            "description": "Сложение положительных чисел"
-        },
-        {
-            "input": "-5\n10",
-            "output": "5",
-            "description": "Сложение отрицательного и положительного"
-        },
-        {
-            "input": "0\n0",
-            "output": "0",
-            "description": "Сложение нулей"
-        }
-    ]
-    
-    create_exercise(
-        lesson_id=3,
-        question="Напишите программу, которая складывает два числа",
-        starter_code='''# Program to add two numbers
-# Read two numbers from input and print their sum
-
-# Hint: use int() to convert strings to numbers
-
-# Example:
-# a = int(input())
-# b = int(input())
-# print(a + b)
-
-# Your code:''',
-        solution_code='''a = int(input())
-b = int(input())
-print(a + b)''',
-        test_cases=test_cases_3
-    )
-    
-    # === УРОК 4: Умножение чисел ===
-    test_cases_4 = [
-        {
-            "input": "5\n3",
-            "output": "15",
-            "description": "Умножение положительных"
-        },
-        {
-            "input": "-5\n10",
-            "output": "-50",
-            "description": "Умножение отрицательного и положительного"
-        },
-        {
-            "input": "7\n0",
-            "output": "0",
-            "description": "Умножение на ноль"
-        }
-    ]
-    
-    create_exercise(
-        lesson_id=4,
-        question="Напишите программу, которая умножает два числа",
-        starter_code='''# Program to multiply two numbers
-# Read two numbers and print their product
-
-# Your code here:''',
-        solution_code='''a = int(input())
-b = int(input())
-print(a * b)''',
-        test_cases=test_cases_4
-    )
-    
-    # === УРОК 5: Проверка чётности ===
-    test_cases_5 = [
-        {
-            "input": "4",
-            "output": "even",
-            "description": "Чётное число"
-        },
-        {
-            "input": "7",
-            "output": "odd",
-            "description": "Нечётное число"
-        },
-        {
-            "input": "0",
-            "output": "even",
-            "description": "Ноль - чётное"
-        }
-    ]
-    
-    create_exercise(
-        lesson_id=5,
-        question="Напишите программу, которая определяет чётность числа",
-        starter_code='''# Check if a number is even or odd
-# Read a number, print "even" if even, "odd" if odd
-
-# Hint: use % operator (remainder)
-# Example: 5 % 2 == 1 (odd), 4 % 2 == 0 (even)
-
-# Your code:''',
-        solution_code='''num = int(input())
-if num % 2 == 0:
-    print("even")
-else:
-    print("odd")''',
-        test_cases=test_cases_5
-    )
-    
-    # === УРОК 6: Максимум из двух чисел ===
-    test_cases_6 = [
-        {
-            "input": "5\n3",
-            "output": "5",
-            "description": "Первое число больше"
-        },
-        {
-            "input": "3\n10",
-            "output": "10",
-            "description": "Второе число больше"
-        },
-        {
-            "input": "7\n7",
-            "output": "7",
-            "description": "Числа равны"
-        }
-    ]
-    
-    create_exercise(
-        lesson_id=6,
-        question="Напишите программу, которая находит максимальное из двух чисел",
-        starter_code='''# Find maximum of two numbers
-# Read two numbers, print the larger one
-# If equal, print either one
-
-# Your code:''',
-        solution_code='''a = int(input())
-b = int(input())
-if a >= b:
-    print(a)
-else:
-    print(b)''',
-        test_cases=test_cases_6
-    )
-    
-    print("[INFO] Тестовые упражнения созданы (без кириллицы в коде)")
-
-# Обновим функцию init_db() для создания таблицы упражнений
-def init_db():
-    """
-    Инициализирует базу данных: создает все необходимые таблицы
-    """
-    conn = get_db_connection()
-    
-    # Включаем поддержку внешних ключей
-    conn.execute("PRAGMA foreign_keys = ON")
-    
-    # СОЗДАЕМ ТАБЛИЦУ УПРАЖНЕНИЙ (добавляем к существующим)
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS exercises (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            lesson_id INTEGER NOT NULL,
-            question TEXT NOT NULL,
-            starter_code TEXT,
-            solution_code TEXT NOT NULL,
-            test_cases TEXT,
-            difficulty VARCHAR(20) DEFAULT 'easy',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (lesson_id) REFERENCES lessons (id) ON DELETE CASCADE
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
-    
-    # Добавляем тестовый курс
-    add_sample_course_with_exercises()

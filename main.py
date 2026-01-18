@@ -380,21 +380,62 @@ def profile():
         flash('Профиль не найден.', 'error')
         return redirect(url_for('index'))
     progress_stats = get_user_progress_summary(session['id'])
+    
+    # Получаем прогресс по курсам
     conn = get_db_connection()
+    
+    # 1. Все курсы пользователя
+    courses = conn.execute('''
+        SELECT c.* FROM courses c
+        JOIN user_progress up ON EXISTS (
+            SELECT 1 FROM lessons l 
+            JOIN modules m ON l.module_id = m.id 
+            WHERE m.course_id = c.id AND up.lesson_id = l.id AND up.user_id = ?
+        )
+        WHERE c.is_active = TRUE
+        GROUP BY c.id
+    ''', (session['id'],)).fetchall()
+    
+    courses_progress = []
+    for course in courses:
+        # Прогресс по курсу
+        progress = conn.execute('''
+            SELECT 
+                COUNT(DISTINCT l.id) as total_lessons,
+                COUNT(DISTINCT up.lesson_id) as completed_lessons
+            FROM lessons l
+            JOIN modules m ON l.module_id = m.id
+            LEFT JOIN user_progress up ON l.id = up.lesson_id AND up.user_id = ? AND up.completed = TRUE
+            WHERE m.course_id = ?
+        ''', (session['id'], course['id'])).fetchone()
+        
+        if progress:
+            progress_percent = (progress['completed_lessons'] / progress['total_lessons'] * 100) if progress['total_lessons'] > 0 else 0
+            courses_progress.append({
+                'id': course['id'],
+                'title': course['title'],
+                'total_lessons': progress['total_lessons'],
+                'completed_lessons': progress['completed_lessons'],
+                'progress_percent': round(progress_percent, 1)
+            })
+    
+    # 2. Последние завершенные уроки
     recent_lessons = conn.execute('''
-        SELECT l.title, up.completed_at, m.title as module_title
+        SELECT l.title, up.completed_at, m.title as module_title, up.completed
         FROM user_progress up
         JOIN lessons l ON up.lesson_id = l.id
         JOIN modules m ON l.module_id = m.id
-        WHERE up.user_id = ? AND up.completed = TRUE
+        WHERE up.user_id = ?
         ORDER BY up.completed_at DESC
-        LIMIT 5
+        LIMIT 10
     ''', (session['id'],)).fetchall()
+    
     conn.close()
     
     return render_template('profile.html',
                          user=user_data,
                          progress_stats=progress_stats,
+                         courses_progress=courses_progress,
                          recent_lessons=recent_lessons)
 
 # ==================== ОБРАБОТЧИКИ ОШИБОК ====================
