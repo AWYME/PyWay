@@ -5,6 +5,8 @@ import sys
 import os
 from datetime import datetime
 
+#TODO: Пофиксить баг с отображением следующего задания при выполнении текущего
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -127,10 +129,9 @@ def signup():
         
         user = create_user(username, email, password)
 
-        
         if user:
             flash('Регистрация успешна!', 'success')
-            session['user_id'] = user['id']
+            session['id'] = user['id']
             session['username'] = user['username']
             session['email'] = user['email']
             session.permanent = True
@@ -183,10 +184,24 @@ def logout():
 @login_required
 def courses():
     """Страница со списком всех курсов"""
+    print(f"[DEBUG] Запрос /courses от пользователя {session['id']}")
+    
+    # Получаем курсы из БД
     courses_list = get_all_courses()
+    print(f"[DEBUG] Получено курсов из БД: {len(courses_list)}")
+    
+    if not courses_list:
+        print("[DEBUG] Нет курсов в БД! Показываем заглушку")
+        # Возвращаем заглушку если БД пуста
+        return render_template('courses.html', 
+                             courses=[], 
+                             user_progress={})
+    
     user_progress = {}
     
+    # Получаем прогресс по каждому курсу
     for course in courses_list:
+        print(f"[DEBUG] Получаем прогресс для курса {course['id']}: {course['title']}")
         progress = get_user_progress(session['id'], course['id'])
         user_progress[course['id']] = progress
     
@@ -302,24 +317,57 @@ def lesson(lesson_id):
 def complete_lesson(lesson_id):
     """
     Отметка урока как пройденного
-    POST-запрос: сохранение прогресса
     """
     try:
+        # Получаем код из формы
         code_submission = request.form.get('code', '')
         
-        update_user_progress(
-            session['id'], 
-            lesson_id, 
+        # Проверяем, существует ли урок
+        lesson = get_lesson(lesson_id)
+        if not lesson:
+            flash('Урок не найден.', 'error')
+            return redirect(url_for('courses'))
+        
+        # Обновляем прогресс пользователя
+        success = update_user_progress(
+            user_id=session['id'],
+            lesson_id=lesson_id,
             code_submission=code_submission if code_submission else None,
             completed=True
         )
         
-        flash('Урок успешно завершен!', 'success')
-        
-        return redirect(url_for('lesson', lesson_id=lesson_id))
+        if success:
+            flash('Урок успешно завершен!', 'success')
+            
+            # Ищем следующий урок
+            conn = get_db_connection()
+            next_lesson = conn.execute('''
+                SELECT l.id 
+                FROM lessons l
+                JOIN modules m ON l.module_id = m.id
+                WHERE m.course_id = (
+                    SELECT m2.course_id 
+                    FROM modules m2 
+                    JOIN lessons l2 ON m2.id = l2.module_id 
+                    WHERE l2.id = ?
+                )
+                AND l.order_index > ?
+                ORDER BY l.order_index
+                LIMIT 1
+            ''', (lesson_id, lesson['order_index'])).fetchone()
+            conn.close()
+            
+            if next_lesson:
+                return redirect(url_for('lesson', lesson_id=next_lesson['id']))
+            else:
+                # Если это последний урок, возвращаем на курс
+                return redirect(url_for('courses'))
+        else:
+            flash('Ошибка при сохранении прогресса.', 'error')
+            return redirect(url_for('lesson', lesson_id=lesson_id))
         
     except Exception as e:
-        flash(f'Ошибка при сохранении прогресса: {str(e)}', 'error')
+        flash(f'Ошибка: {str(e)}', 'error')
         return redirect(url_for('lesson', lesson_id=lesson_id))
 
 # ==================== API ДЛЯ РЕДАКТОРА КОДА ====================

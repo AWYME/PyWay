@@ -110,13 +110,22 @@ def get_all_courses():
         list: Список объектов sqlite3.Row с данными курсов.
     """
     conn = get_db_connection()
-    courses = conn.execute('''
-        SELECT * FROM courses 
-        WHERE is_active = TRUE 
-        ORDER BY order_index
-    ''').fetchall()
-    conn.close()
-    return courses
+    
+    try:
+        courses = conn.execute('''
+            SELECT * FROM courses 
+            WHERE is_active = TRUE 
+            ORDER BY order_index
+        ''').fetchall()
+        
+        print(f"[DB] get_all_courses() вернула {len(courses)} курсов")
+        return courses
+        
+    except Exception as e:
+        print(f"[DB ERROR] Ошибка в get_all_courses(): {e}")
+        return []
+    finally:
+        conn.close()
 
 def get_course_with_content(course_id):
     """

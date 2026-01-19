@@ -1,3 +1,3 @@
 from db.db import *
 
-init_db()
+print(get_user_by_username('AWYME'))

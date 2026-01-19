@@ -76,23 +76,39 @@
                 <div class="lesson-navigation">
                     {% if prev_lesson %}
                     <a href="{{ url_for('lesson', lesson_id=prev_lesson.id) }}" class="btn btn-secondary">
-                        ← {{ prev_lesson.title[:30] }}...
+                        ← {{ prev_lesson.title[:30] }}{% if prev_lesson.title|length > 30 %}...{% endif %}
                     </a>
                     {% endif %}
                     
+                    <form method="POST" action="{{ url_for('complete_lesson', lesson_id=lesson.id) }}" style="display: inline;">
+                        <input type="hidden" name="code" id="nav-code-input">
+                        <button type="submit" class="btn btn-success" id="complete-btn">
+                            ✅ Завершить и продолжить
+                        </button>
+                    </form>
+                    
                     {% if next_lesson %}
-                    <a href="{{ url_for('lesson', lesson_id=next_lesson.id) }}" class="btn btn-primary" style="margin-left: auto;">
-                        {{ next_lesson.title[:30] }}... →
+                    <a href="{{ url_for('lesson', lesson_id=next_lesson.id) }}" class="btn btn-primary">
+                        {{ next_lesson.title[:30] }}{% if next_lesson.title|length > 30 %}...{% endif %} →
                     </a>
                     {% else %}
-                    <a href="{{ url_for('courses') }}" class="btn btn-primary" style="margin-left: auto;">
-                        Завершить модуль
+                    <a href="{{ url_for('courses') }}" class="btn btn-primary">
+                        Завершить курс →
                     </a>
                     {% endif %}
                 </div>
             </div>
         </div>
-
+        <script>
+            // Сохраняем код перед отправкой формы завершения
+            document.getElementById('complete-btn')?.addEventListener('click', function(e) {
+                const codeInput = document.getElementById('nav-code-input');
+                if (codeInput && window.codeEditor) {
+                    codeInput.value = window.codeEditor.getValue();
+                }
+            });
+        </script>
+        
         <!-- Правая колонка: Редактор кода -->
         <div class="editor-section">
             <div class="editor-header">
