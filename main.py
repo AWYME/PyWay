@@ -5,8 +5,6 @@ import sys
 import os
 from datetime import datetime
 
-#TODO: Пофиксить баг с отображением следующего задания при выполнении текущего
-
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
@@ -14,8 +12,6 @@ app.config['SESSION_COOKIE_SECURE'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400
 app.config['JSON_AS_ASCII'] = False
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
-
-# ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
 def login_required(f):
     from functools import wraps
@@ -94,8 +90,6 @@ def get_user_progress_summary(id):
     
     return None
 
-# ==================== МАРШРУТЫ АУТЕНТИФИКАЦИИ ====================
-
 @app.route('/')
 def index():
     courses = get_all_courses()
@@ -173,33 +167,26 @@ def login():
 
 @app.route('/logout')
 def logout():
-    """Выход из системы"""
     session.clear()
     flash('Вы успешно вышли из системы.', 'success')
     return redirect(url_for('index'))
 
-# ==================== МАРШРУТЫ КУРСОВ И УРОКОВ ====================
-
 @app.route('/courses')
 @login_required
 def courses():
-    """Страница со списком всех курсов"""
     print(f"[DEBUG] Запрос /courses от пользователя {session['id']}")
     
-    # Получаем курсы из БД
     courses_list = get_all_courses()
     print(f"[DEBUG] Получено курсов из БД: {len(courses_list)}")
     
     if not courses_list:
         print("[DEBUG] Нет курсов в БД! Показываем заглушку")
-        # Возвращаем заглушку если БД пуста
         return render_template('courses.html', 
                              courses=[], 
                              user_progress={})
     
     user_progress = {}
     
-    # Получаем прогресс по каждому курсу
     for course in courses_list:
         print(f"[DEBUG] Получаем прогресс для курса {course['id']}: {course['title']}")
         progress = get_user_progress(session['id'], course['id'])
@@ -228,65 +215,31 @@ def course_detail(course_id):
 @app.route('/lesson/<int:lesson_id>')
 @login_required
 def lesson(lesson_id):
-    """
-    Страница урока с редактором кода
-    """
-    # Получаем данные урока
     lesson_data = get_lesson(lesson_id)
     
     if not lesson_data:
         flash('Урок не найден.', 'error')
         return redirect(url_for('courses'))
-    
-    # Получаем информацию о модуле и курсе
     conn = get_db_connection()
     module = conn.execute('SELECT * FROM modules WHERE id = ?', 
                          (lesson_data['module_id'],)).fetchone()
     course = conn.execute('SELECT * FROM courses WHERE id = ?', 
                          (module['course_id'],)).fetchone()
-    
-    # Получаем упражнение для этого урока
     exercise = get_exercise_for_lesson(lesson_id)
     conn.close()
     
-    # Проверяем, пройден ли урок
     conn = get_db_connection()
     progress = conn.execute('''
         SELECT completed FROM user_progress 
         WHERE id = ? AND lesson_id = ?
     ''', (session['id'], lesson_id)).fetchone()
     conn.close()
-    
     lesson_completed = bool(progress and progress['completed'])
+        
+    test_cases = exercise.get('test_cases', [])
+    starter_code = exercise.get('starter_code', '')
+    question = exercise.get('question', '')
     
-    # Если у урока нет упражнения, используем заглушку
-    if not exercise:
-        test_cases = [
-    {
-        "input": "",
-        "output": "Hello, World!",
-        "description": "Basic output test"
-    },
-    {
-        "input": "",
-        "output": "Hello, World!\n",
-        "description": "Test with newline"
-    }
-]
-        starter_code = '''# Your first Python program
-# Write code that prints "Hello, World!"
-
-# Example solution:
-# print("Hello, World!")
-
-# Your code below:'''
-        question = "Задание для этого урока находится в разработке"
-    else:
-        test_cases = exercise.get('test_cases', [])
-        starter_code = exercise.get('starter_code', '')
-        question = exercise.get('question', '')
-    
-    # Получаем следующий и предыдущий уроки для навигации
     conn = get_db_connection()
     next_lesson = conn.execute('''
         SELECT id, title FROM lessons 
@@ -315,20 +268,14 @@ def lesson(lesson_id):
 @app.route('/lesson/<int:lesson_id>/complete', methods=['POST'])
 @login_required
 def complete_lesson(lesson_id):
-    """
-    Отметка урока как пройденного
-    """
     try:
-        # Получаем код из формы
         code_submission = request.form.get('code', '')
         
-        # Проверяем, существует ли урок
         lesson = get_lesson(lesson_id)
         if not lesson:
             flash('Урок не найден.', 'error')
             return redirect(url_for('courses'))
         
-        # Обновляем прогресс пользователя
         success = update_user_progress(
             user_id=session['id'],
             lesson_id=lesson_id,
@@ -338,8 +285,6 @@ def complete_lesson(lesson_id):
         
         if success:
             flash('Урок успешно завершен!', 'success')
-            
-            # Ищем следующий урок
             conn = get_db_connection()
             next_lesson = conn.execute('''
                 SELECT l.id 
@@ -360,7 +305,6 @@ def complete_lesson(lesson_id):
             if next_lesson:
                 return redirect(url_for('lesson', lesson_id=next_lesson['id']))
             else:
-                # Если это последний урок, возвращаем на курс
                 return redirect(url_for('courses'))
         else:
             flash('Ошибка при сохранении прогресса.', 'error')
@@ -370,15 +314,9 @@ def complete_lesson(lesson_id):
         flash(f'Ошибка: {str(e)}', 'error')
         return redirect(url_for('lesson', lesson_id=lesson_id))
 
-# ==================== API ДЛЯ РЕДАКТОРА КОДА ====================
-
 @app.route('/api/execute', methods=['POST'])
 @login_required
 def execute_code():
-    """
-    API для выполнения Python кода
-    Используется редактором кода на странице урока
-    """
     if not request.is_json:
         return jsonify({'error': 'Content-Type должен быть application/json'}), 400
     
@@ -403,8 +341,6 @@ def execute_code():
 @app.route('/api/lesson/<int:lesson_id>/tests')
 @login_required
 def get_lesson_tests(lesson_id):
-    """API для получения тестовых данных урока"""
-    # В реальном проекте брать из БД
     test_cases = [
         {"input": "5\n3", "output": "8", "description": "Тест 1"},
         {"input": "10\n-2", "output": "8", "description": "Тест 2"},
@@ -416,23 +352,16 @@ def get_lesson_tests(lesson_id):
         'test_cases': test_cases
     })
 
-# ==================== ПРОФИЛЬ И СТАТИСТИКА ====================
-
 @app.route('/profile')
 @login_required
 def profile():
-    """Страница профиля пользователя"""
     user_data = get_user_profile(session['id'])
     
     if not user_data:
         flash('Профиль не найден.', 'error')
         return redirect(url_for('index'))
     progress_stats = get_user_progress_summary(session['id'])
-    
-    # Получаем прогресс по курсам
     conn = get_db_connection()
-    
-    # 1. Все курсы пользователя
     courses = conn.execute('''
         SELECT c.* FROM courses c
         JOIN user_progress up ON EXISTS (
@@ -446,7 +375,6 @@ def profile():
     
     courses_progress = []
     for course in courses:
-        # Прогресс по курсу
         progress = conn.execute('''
             SELECT 
                 COUNT(DISTINCT l.id) as total_lessons,
@@ -466,8 +394,6 @@ def profile():
                 'completed_lessons': progress['completed_lessons'],
                 'progress_percent': round(progress_percent, 1)
             })
-    
-    # 2. Последние завершенные уроки
     recent_lessons = conn.execute('''
         SELECT l.title, up.completed_at, m.title as module_title, up.completed
         FROM user_progress up
@@ -477,41 +403,25 @@ def profile():
         ORDER BY up.completed_at DESC
         LIMIT 10
     ''', (session['id'],)).fetchall()
-    
     conn.close()
-    
     return render_template('profile.html',
                          user=user_data,
                          progress_stats=progress_stats,
                          courses_progress=courses_progress,
                          recent_lessons=recent_lessons)
 
-# ==================== ОБРАБОТЧИКИ ОШИБОК ====================
-
+#Обработчики ошибок есть, но html страницы не написаны
 @app.errorhandler(404)
 def page_not_found(error):
-    """Обработка ошибки 404"""
     return render_template('errors/404.html'), 404
 
 @app.errorhandler(500)
 def internal_error(error):
-    """Обработка ошибки 500"""
     return render_template('errors/500.html'), 500
-
-# ==================== ЗАПУСК ПРИЛОЖЕНИЯ ====================
-
-if __name__ == '__main__':
-    app.run(
-        host='0.0.0.0',
-        port=5000,
-        debug=True,
-        threaded=True
-    )
 
 @app.route('/api/lesson/<int:lesson_id>/save-code', methods=['POST'])
 @login_required
 def save_lesson_code(lesson_id):
-    """Сохранение кода пользователя для урока"""
     if not request.is_json:
         return jsonify({'error': 'Invalid content type'}), 400
     
@@ -521,7 +431,6 @@ def save_lesson_code(lesson_id):
     if not code:
         return jsonify({'error': 'Code is empty'}), 400
     
-    # Сохраняем код в прогресс пользователя
     conn = get_db_connection()
     conn.execute('''
         INSERT OR REPLACE INTO user_progress 
@@ -537,7 +446,6 @@ def save_lesson_code(lesson_id):
 @app.route('/api/lesson/<int:lesson_id>/get-code', methods=['GET'])
 @login_required
 def get_saved_code(lesson_id):
-    """Получение сохранённого кода пользователя"""
     conn = get_db_connection()
     progress = conn.execute('''
         SELECT code_submission FROM user_progress 
@@ -552,3 +460,11 @@ def get_saved_code(lesson_id):
         })
     
     return jsonify({'success': False, 'code': ''})
+
+if __name__ == '__main__':
+    app.run(
+        host='0.0.0.0',
+        port=5000,
+        debug=True,
+        threaded=True
+    )

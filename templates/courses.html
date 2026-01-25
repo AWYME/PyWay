@@ -55,23 +55,19 @@
                         </a>
                     {% elif percent == 100 %}
                         <button class="btn btn-success" disabled>
-                            ✅ Завершено
+                            Завершено
                         </button>
                     {% else %}
-                        {# Первый урок курса #}
                         <a href="{{ url_for('lesson', lesson_id=1) }}" class="btn btn-primary">
                             Начать
                         </a>
                     {% endif %}
-                    
-                    {# Убираем кнопку "Обзор" или делаем неактивной #}
                     <button class="btn btn-secondary" disabled title="Скоро будет доступно">
                         Обзор
                     </button>
                 </div>
                 
             {% else %}
-                {# Нет данных о прогрессе #}
                 <div class="course-progress">
                     <div class="progress-info">
                         <span>Новый курс</span>
@@ -93,9 +89,7 @@
     </div>
     
     {% else %}
-    {# Если курсов нет в БД - заглушка #}
     <div class="empty-courses">
-        <div class="empty-icon">📚</div>
         <h2>Курсы в разработке</h2>
         <p>Мы активно работаем над созданием новых курсов. Скоро здесь появятся увлекательные уроки по Python!</p>
         
@@ -103,12 +97,10 @@
             <h3>Попробуйте демо-уроки:</h3>
             <div class="demo-lessons">
                 <a href="{{ url_for('lesson', lesson_id=1) }}" class="demo-lesson">
-                    <span class="demo-icon">🚀</span>
                     <span class="demo-title">Hello, World!</span>
                     <span class="demo-desc">Ваша первая программа</span>
                 </a>
                 <a href="{{ url_for('lesson', lesson_id=2) }}" class="demo-lesson">
-                    <span class="demo-icon">👤</span>
                     <span class="demo-title">Приветствие</span>
                     <span class="demo-desc">Работа с вводом данных</span>
                 </a>

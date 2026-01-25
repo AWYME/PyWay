@@ -23,38 +23,33 @@
     </div>
 
     <div class="profile-stats">
-        <h2>📊 Статистика обучения</h2>
+        <h2>Статистика обучения</h2>
         
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-icon">🎯</div>
                 <div class="stat-number">{{ progress_stats.completed_lessons|default(0) }}</div>
                 <div class="stat-label">уроков пройдено</div>
             </div>
             
             <div class="stat-card">
-                <div class="stat-icon">⭐</div>
                 <div class="stat-number">{{ user.experience|default(0) }}</div>
                 <div class="stat-label">очков опыта</div>
             </div>
             
             <div class="stat-card">
-                <div class="stat-icon">🔥</div>
                 <div class="stat-number">{{ user.streak_days|default(0) }}</div>
                 <div class="stat-label">дней подряд</div>
             </div>
             
             <div class="stat-card">
-                <div class="stat-icon">📈</div>
                 <div class="stat-number">{{ progress_stats.progress_percent|default(0) }}%</div>
                 <div class="stat-label">общий прогресс</div>
             </div>
         </div>
     </div>
 
-    <!-- Прогресс по курсам -->
     <div class="courses-progress">
-        <h2>📚 Прогресс по курсам</h2>
+        <h2>Прогресс по курсам</h2>
         
         {% if courses_progress %}
             {% for course in courses_progress %}
@@ -80,75 +75,6 @@
                 <a href="{{ url_for('courses') }}" class="btn btn-primary">Начать обучение</a>
             </div>
         {% endif %}
-    </div>
-
-    <!-- Последние достижения -->
-    <div class="recent-activity">
-        <h2>🕒 Недавняя активность</h2>
-        
-        {% if recent_lessons %}
-            <div class="activity-list">
-                {% for lesson in recent_lessons %}
-                <div class="activity-item">
-                    <div class="activity-icon">
-                        {% if lesson.completed %}✅{% else %}🔄{% endif %}
-                    </div>
-                    <div class="activity-content">
-                        <div class="activity-title">
-                            <strong>{{ lesson.title }}</strong>
-                            <span class="activity-time">{{ lesson.completed_at[:16] }}</span>
-                        </div>
-                        <div class="activity-details">
-                            Модуль: {{ lesson.module_title }}
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        {% else %}
-            <div class="empty-state">
-                <p>Пока нет завершённых уроков</p>
-            </div>
-        {% endif %}
-    </div>
-
-    <!-- Достижения (заглушка для будущего) -->
-    <div class="achievements">
-        <h2>🏆 Достижения</h2>
-        <div class="achievements-grid">
-            <div class="achievement locked">
-                <div class="achievement-icon">👑</div>
-                <div class="achievement-info">
-                    <h4>Первый урок</h4>
-                    <p>Завершите первый урок</p>
-                </div>
-                <div class="achievement-status">
-                    {% if progress_stats.completed_lessons > 0 %}✅{% else %}🔒{% endif %}
-                </div>
-            </div>
-            
-            <div class="achievement locked">
-                <div class="achievement-icon">💪</div>
-                <div class="achievement-info">
-                    <h4>Неделя обучения</h4>
-                    <p>Занимайтесь 7 дней подряд</p>
-                </div>
-                <div class="achievement-status">
-                    {% if user.streak_days >= 7 %}✅{% else %}🔒{% endif %}
-                </div>
-            </div>
-            
-            <div class="achievement locked">
-                <div class="achievement-icon">🚀</div>
-                <div class="achievement-info">
-                    <h4>Мастер Python</h4>
-                    <p>Завершите все уроки</p>
-                </div>
-                <div class="achievement-status">
-                    {% if progress_stats.progress_percent == 100 %}✅{% else %}🔒{% endif %}
-                </div>
-            </div>
-        </div>
     </div>
 </div>
 {% endblock %}

@@ -1,5 +1,3 @@
-/* Стили для редактора кода PyWay */
-
 .lesson-container {
     max-width: 1400px;
     margin: 0 auto;
@@ -31,7 +29,6 @@
     border: 1px solid #eaeaea;
 }
 
-/* Основной макет */
 .lesson-layout {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -45,7 +42,6 @@
     }
 }
 
-/* Левая колонка: Теория */
 .theory-section {
     background: white;
     border-radius: 10px;
@@ -78,7 +74,6 @@
     font-family: 'Consolas', monospace;
 }
 
-/* Задание */
 .assignment {
     background: #f8f9fa;
     border-left: 4px solid #3498db;
@@ -97,7 +92,6 @@
     margin-bottom: 20px;
 }
 
-/* Примеры */
 .examples {
     margin-top: 25px;
 }
@@ -147,7 +141,6 @@
     font-size: 0.85em;
 }
 
-/* Правая колонка: Редактор */
 .editor-section {
     display: flex;
     flex-direction: column;
@@ -219,7 +212,6 @@
     background: #219653;
 }
 
-/* Редактор кода */
 #code-editor {
     border: 1px solid #ddd;
     border-radius: 0 0 10px 10px;
@@ -250,7 +242,6 @@
     white-space: nowrap;
 }
 
-/* Консоль с результатами */
 .console-section {
     background: white;
     border-radius: 10px;
@@ -297,7 +288,6 @@
     font-style: italic;
 }
 
-/* Результаты тестов */
 .test-result {
     border: 1px solid #eee;
     border-radius: 8px;
@@ -389,7 +379,6 @@
     border-top: 1px solid #eee;
 }
 
-/* Индикатор загрузки */
 .execution-info {
     margin-top: 20px;
     padding-top: 20px;
@@ -424,7 +413,6 @@
     margin-top: 10px;
 }
 
-/* Секция завершения */
 #completion-section {
     margin-top: 30px;
     animation: fadeIn 0.5s ease;
@@ -449,13 +437,11 @@
     font-size: 1.1em;
 }
 
-/* Анимации */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Кастомизация CodeMirror для Python */
 .CodeMirror .cm-keyword { color: #cc7832; }
 .CodeMirror .cm-builtin { color: #9876aa; }
 .CodeMirror .cm-number { color: #6897bb; }
