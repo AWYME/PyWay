@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Профиль {{ user.username }} - PyWay{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    <div class="profile-header">
+        <div class="profile-avatar">
+            <div class="avatar-circle">
+                {{ user.username[0]|upper }}
+            </div>
+        </div>
+        <div class="profile-info">
+            <h1>{{ user.username }}</h1>
+            <p class="profile-email">{{ user.email }}</p>
+            <p class="profile-join-date">На PyWay с {{ user.created_at[:10] }}</p>
+        </div>
+        <div class="profile-level">
+            <div class="level-badge">
+                <span class="level-number">Уровень {{ user.level }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="profile-stats">
+        <h2>Статистика обучения</h2>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number">{{ progress_stats.completed_lessons|default(0) }}</div>
+                <div class="stat-label">уроков пройдено</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-number">{{ user.experience|default(0) }}</div>
+                <div class="stat-label">очков опыта</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-number">{{ user.streak_days|default(0) }}</div>
+                <div class="stat-label">дней подряд</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-number">{{ progress_stats.progress_percent|default(0) }}%</div>
+                <div class="stat-label">общий прогресс</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="courses-progress">
+        <h2>Прогресс по курсам</h2>
+        
+        {% if courses_progress %}
+            {% for course in courses_progress %}
+            <div class="course-progress-card">
+                <div class="course-progress-header">
+                    <h3>{{ course.title }}</h3>
+                    <span class="progress-percent">{{ course.progress_percent }}%</span>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ course.progress_percent }}%"></div>
+                </div>
+                
+                <div class="course-stats">
+                    <span>Пройдено: {{ course.completed_lessons }}/{{ course.total_lessons }} уроков</span>
+                    <span>Опыт: {{ course.experience|default(0) }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <p>Вы ещё не начали ни одного курса</p>
+                <a href="{{ url_for('courses') }}" class="btn btn-primary">Начать обучение</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

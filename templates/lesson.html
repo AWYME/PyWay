@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Урок {{ lesson.title }} - PyWay{% endblock %}
+
+{% block content %}
+<div class="lesson-container">
+    <div class="lesson-header">
+        <div class="breadcrumbs">
+            <a href="{{ url_for('courses') }}">Курсы</a> / 
+            <a href="{{ url_for('course_detail', course_id=course.id if course else 1) }}">
+                {{ course_title }}
+            </a> / 
+            <span>{{ lesson.title }}</span>
+        </div>
+        
+        <h1>{{ lesson.title }}</h1>
+        <div class="lesson-meta">
+            <span class="module-badge">Модуль: {{ module_title }}</span>
+            <span class="progress-status">
+                {% if lesson_completed %}Пройдено{% else %}В процессе{% endif %}
+            </span>
+        </div>
+    </div>
+
+    <div class="lesson-layout">
+        <div class="theory-section">
+            <div class="theory-content">
+                <h2>Теория</h2>
+                <div class="theory-text">
+                    {{ lesson.content|safe }}
+                </div>
+                
+                <div class="assignment">
+                    <h3>Задание</h3>
+                    <div class="assignment-description">
+                        {{ question|default("Напишите код для решения задачи") }}
+                    </div>
+                    
+                    {% if test_cases %}
+                    <div class="examples">
+                        <h4>Примеры работы программы:</h4>
+                        <table class="examples-table">
+                            <thead>
+                                <tr>
+                                    <th>Входные данные (input)</th>
+                                    <th>Ожидаемый вывод (output)</th>
+                                    <th>Описание</th>
+                                </tr>
+                            </thead>
+                            <tbody id="test-cases-list">
+                                {% for test in test_cases %}
+                                <tr>
+                                    <td>
+                                        <div class="test-case-input">
+                                            {{ test.input|replace('\n', '<br>')|safe if test.input else "(пусто)" }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="test-case-output">
+                                            {{ test.output }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <small>{{ test.description|default("Тест " ~ loop.index) }}</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="lesson-navigation">
+                    {% if prev_lesson %}
+                    <a href="{{ url_for('lesson', lesson_id=prev_lesson.id) }}" class="btn btn-secondary">
+                        ← {{ prev_lesson.title[:30] }}{% if prev_lesson.title|length > 30 %}...{% endif %}
+                    </a>
+                    {% endif %}
+                    
+                    <form method="POST" action="{{ url_for('complete_lesson', lesson_id=lesson.id) }}" style="display: inline;">
+                        <input type="hidden" name="code" id="nav-code-input">
+                        <button type="submit" class="btn btn-success" id="complete-btn">
+                            Завершить и продолжить
+                        </button>
+                    </form>
+                    
+                    {% if next_lesson %}
+                    <a href="{{ url_for('lesson', lesson_id=next_lesson.id) }}" class="btn btn-primary">
+                        {{ next_lesson.title[:30] }}{% if next_lesson.title|length > 30 %}...{% endif %} →
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('courses') }}" class="btn btn-primary">
+                        Завершить курс →
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <script>
+            document.getElementById('complete-btn')?.addEventListener('click', function(e) {
+                const codeInput = document.getElementById('nav-code-input');
+                if (codeInput && window.codeEditor) {
+                    codeInput.value = window.codeEditor.getValue();
+                }
+            });
+        </script>
+        <div class="editor-section">
+            <div class="editor-header">
+                <h2>Редактор кода</h2>
+                <div class="editor-controls">
+                    <button id="run-btn" class="btn btn-primary">
+                        ► Запустить тесты
+                    </button>
+                    <button id="reset-btn" class="btn btn-secondary">
+                        ↻ Сбросить код
+                    </button>
+                </div>
+            </div>
+            <div id="code-editor"></div>
+            <div class="editor-footer">
+                <div class="hint-box">
+                    <strong>Подсказка:</strong>
+                    <span id="hint-text">
+                        {% if lesson.hints %}{{ lesson.hints }}{% else %}
+                        Используйте print() для вывода результата. Тестируйте код на всех примерах!
+                        {% endif %}
+                    </span>
+                </div>
+            </div>
+
+            <div class="console-section">
+                <div class="console-header">
+                    <h3>Результаты тестирования</h3>
+                    <div class="console-stats">
+                        <span id="test-count">Тестов: {{ test_cases|length }}</span>
+                        <span id="passed-count">Пройдено: 0</span>
+                        <span id="failed-count">Не пройдено: 0</span>
+                    </div>
+                </div>
+                
+                <div class="console-output">
+                    <div id="test-results">
+                        <div class="empty-results">
+                            <p>Запустите тесты, чтобы проверить ваше решение</p>
+                        </div>
+                    </div>
+                    
+                    <div class="execution-info">
+                        <div id="loading-indicator" style="display: none;">
+                            <div class="spinner"></div>
+                            <span>Выполнение кода...</span>
+                        </div>
+                        <div id="execution-time" style="display: none;">
+                            Время выполнения: <span id="time-value">0</span> сек
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="completion-section" style="display: none;">
+                    <div class="success-message">
+                        <h3>Поздравляем!</h3>
+                        <p>Вы успешно выполнили все тесты для этого урока.</p>
+                        <form method="POST" action="{{ url_for('complete_lesson', lesson_id=lesson.id) }}">
+                            <input type="hidden" name="code" id="final-code-input">
+                            <button type="submit" class="btn btn-success">
+                                Завершить урок и сохранить код
+                            </button>
+                        </form>
+                        <p class="small-text">Ваш код будет сохранён в истории выполнения</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/python/python.min.js"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/editor.css') }}">
+<script>
+// Компилятор подсвечивает ошибку из-за нарушения синтаксиса Jinja, но код работает без проблем
+window.lessonConfig = {
+    lessonId: {{ lesson.id }},
+    defaultCode: {{ starter_code|tojson|safe }},
+    testCases: {{ test_cases|tojson|safe }},
+    isCompleted: {{ lesson_completed|tojson }},
+    apiUrl: "{{ url_for('execute_code') }}"
+};
+console.log('PyWay: Конфигурация урока загружена:', window.lessonConfig);
+</script>
+<script src="{{ url_for('static', filename='js/editor.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('PyWay: Страница урока загружена');
+    setTimeout(function() {
+        if (typeof window.codeEditor === 'undefined') {
+            console.warn('PyWay: Редактор не инициализирован, создаём текстовое поле');
+            const editorElement = document.getElementById('code-editor');
+            if (editorElement) {
+                editorElement.innerHTML = `
+                    <textarea id="fallback-editor" 
+                              style="width:100%; height:400px; font-family: 'Consolas', monospace; padding:10px;">
+${window.lessonConfig.defaultCode}
+                    </textarea>
+                    <p><small><em>Редактор CodeMirror не загрузился. Используйте текстовое поле.</em></small></p>
+                `;
+                window.codeEditor = {
+                    getValue: function() { return document.getElementById('fallback-editor').value; },
+                    setValue: function(code) { document.getElementById('fallback-editor').value = code; }
+                };
+            }
+        }
+    }, 500);
+    
+    const form = document.querySelector('form[action*="complete"]');
+    if (form) {
+        form.addEventListener('submit', function() {
+            const finalCodeInput = document.getElementById('final-code-input');
+            if (finalCodeInput && window.codeEditor) {
+                finalCodeInput.value = window.codeEditor.getValue();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

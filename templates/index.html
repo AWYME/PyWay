@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Изучайте Python - PyWay{% endblock %}
+
+{% block content %}
+<div class="hero-section">
+    <h1>Изучайте Python в игровой форме</h1>
+    <p>Интерактивные уроки, практические задания и отслеживание прогресса</p>
+    
+    <div class="cta-buttons">
+        {% if session.get('id') %}
+            <a href="{{ url_for('courses') }}" class="btn btn-primary">Продолжить обучение</a>
+            <a href="{{ url_for('profile') }}" class="btn btn-secondary">Мой прогресс</a>
+        {% else %}
+            <a href="{{ url_for('signup') }}" class="btn btn-primary">Начать обучение бесплатно</a>
+            <a href="{{ url_for('courses') }}" class="btn btn-secondary">Смотреть курсы</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if session.get('id') %}
+<div class="user-stats">
+    <h2>Ваш прогресс</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ user_stats.completed_lessons|default(0) }}</div>
+            <div class="stat-label">уроков пройдено</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ user_stats.level|default(1) }}</div>
+            <div class="stat-label">уровень</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ user_stats.experience|default(0) }}</div>
+            <div class="stat-label">опыт</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="features">
+    <h2>Почему PyWay?</h2>
+    <div class="features-grid">
+        <div class="feature">
+            <h3>Интерактивный редактор</h3>
+            <p>Пишите код прямо в браузере с мгновенной проверкой</p>
+        </div>
+        <div class="feature">
+            <h3>Отслеживание прогресса</h3>
+            <p>Наглядная статистика и достижения</p>
+        </div>
+        <div class="feature">
+            <h3>Практические задачи</h3>
+            <p>Реальные примеры и тестовые задания</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

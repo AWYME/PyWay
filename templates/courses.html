@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Курсы - PyWay{% endblock %}
+
+{% block content %}
+<div class="courses-container">
+    <h1>Доступные курсы</h1>
+    
+    {% if courses %}
+    <p class="courses-description">Выберите курс для начала обучения. Ваш прогресс будет сохраняться автоматически.</p>
+    
+    <div class="courses-grid">
+        {% for course in courses %}
+        <div class="course-card">
+            <div class="course-header">
+                <h2>{{ course.title }}</h2>
+                <span class="course-level level-{{ course.difficulty_level }}">
+                    {{ course.difficulty_level }}
+                </span>
+            </div>
+            
+            <p class="course-description">{{ course.description }}</p>
+            
+            {% if user_progress[course.id] %}
+                {% set progress = user_progress[course.id] %}
+                
+                {% if progress is iterable %}
+                    {# Детальный прогресс (список уроков) #}
+                    {% set completed = progress|selectattr('completed')|list|length %}
+                    {% set total = progress|length %}
+                    {% set percent = (completed / total * 100)|round|int if total > 0 else 0 %}
+                {% else %}
+                    {# Общая статистика #}
+                    {% set completed = progress.completed_lessons|default(0) %}
+                    {% set total = progress.total_lessons|default(1) %}
+                    {% set percent = progress.progress_percent|default(0)|round|int %}
+                {% endif %}
+                
+                <div class="course-progress">
+                    <div class="progress-info">
+                        <span>Прогресс: {{ percent }}%</span>
+                        <span>{{ completed }}/{{ total }} уроков</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: {{ percent }}%"></div>
+                    </div>
+                </div>
+                
+                <div class="course-actions">
+                    {% if percent > 0 and percent < 100 %}
+                        {# Находим первый непройденный урок #}
+                        {% set next_lesson_id = 1 %} {# Заглушка - в реальности нужно вычислять #}
+                        <a href="{{ url_for('lesson', lesson_id=next_lesson_id) }}" class="btn btn-primary">
+                            Продолжить
+                        </a>
+                    {% elif percent == 100 %}
+                        <button class="btn btn-success" disabled>
+                            Завершено
+                        </button>
+                    {% else %}
+                        <a href="{{ url_for('lesson', lesson_id=1) }}" class="btn btn-primary">
+                            Начать
+                        </a>
+                    {% endif %}
+                    <button class="btn btn-secondary" disabled title="Скоро будет доступно">
+                        Обзор
+                    </button>
+                </div>
+                
+            {% else %}
+                <div class="course-progress">
+                    <div class="progress-info">
+                        <span>Новый курс</span>
+                        <span>0/{{ course.total_lessons|default('?') }} уроков</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <div class="course-actions">
+                    <a href="{{ url_for('course_detail', course_id=course.id) }}" class="btn btn-primary">
+                        Начать обучение
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    
+    {% else %}
+    <div class="empty-courses">
+        <h2>Курсы в разработке</h2>
+        <p>Мы активно работаем над созданием новых курсов. Скоро здесь появятся увлекательные уроки по Python!</p>
+        
+        <div class="demo-courses">
+            <h3>Попробуйте демо-уроки:</h3>
+            <div class="demo-lessons">
+                <a href="{{ url_for('lesson', lesson_id=1) }}" class="demo-lesson">
+                    <span class="demo-title">Hello, World!</span>
+                    <span class="demo-desc">Ваша первая программа</span>
+                </a>
+                <a href="{{ url_for('lesson', lesson_id=2) }}" class="demo-lesson">
+                    <span class="demo-title">Приветствие</span>
+                    <span class="demo-desc">Работа с вводом данных</span>
+                </a>
+            </div>
+        </div>
+        
+        <div class="admin-note">
+            <p><strong>Для администратора:</strong> Курсы не загружены в базу данных.</p>
+            <p>Проверьте функцию <code>add_sample_course_with_exercises()</code> в <code>database.py</code></p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
